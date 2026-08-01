@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 
-DATABASE_PATH = Path(__file__).resolve().parent / "real_estate.db"
+# 데이터 파일은 저장 기능 코드와 함께 storage 폴더에서 관리한다.
+DATABASE_PATH = Path(__file__).resolve().with_name("real_estate.db")
 
 
 SCHEMA = """

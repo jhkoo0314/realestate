@@ -74,6 +74,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "unit_highlights": _clean_text(raw.get("unit_highlights")),
         },
         "listing": {
+            "received_date": _date_text(raw.get("received_date")) or date.today().isoformat(),
             "listing_status": raw.get("listing_status"),
             "deposit_manwon": int(deposit),
             "monthly_rent_manwon": int(rent),

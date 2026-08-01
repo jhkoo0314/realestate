@@ -21,7 +21,7 @@ INPUT_KEYS = [
     "has_elevator", "parking_status", "building_internal_note", "unit_number", "floor_number",
     "room_type", "direction", "access_method", "unit_access_password", "photo_folder_url",
     "unit_highlights", "listing_status", "deposit_manwon", "monthly_rent_manwon",
-    "management_fee_manwon", "availability_type", "available_from_date", "move_out_due_date",
+    "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
     "photo_status", "listing_note", "next_check_date",
 ]
 
@@ -87,6 +87,7 @@ def _show_input_fields() -> None:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="registration_availability_type")
         st.number_input("월세 (만원) *", min_value=0, step=1, value=None, key="registration_monthly_rent_manwon")
     with listing_right:
+        st.date_input("매물 접수일", value=date.today(), key="registration_received_date", help="기본값은 오늘입니다. 실제 접수일이 다르면 바꿔 주세요.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="registration_management_fee_manwon")
         st.selectbox("사진 상태", ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"], key="registration_photo_status")
 
