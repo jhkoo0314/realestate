@@ -1,0 +1,14 @@
+# 개발 중 자동으로 생기는 파일
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Streamlit의 로컬 설정·사용 기록
+.streamlit/secrets.toml
+
+# 이후 단계에서 만들 실제 운영 데이터와 내보내기 파일
+*.db
+*.sqlite
+*.sqlite3
+exports/
+backups/

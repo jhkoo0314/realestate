@@ -1,0 +1,2 @@
+# 현재 Anaconda base 환경에서 확인한 버전
+streamlit==1.51.0
