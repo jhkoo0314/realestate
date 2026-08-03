@@ -4,6 +4,7 @@ import streamlit as st
 
 from ui.building_management import render_building_management
 from ui.contract_management import render_contract_management
+from ui.consultation_management import render_consultation_management
 from ui.dashboard import render_dashboard
 from ui.listing_form import render_listing_form, reset_for_new_listing
 
@@ -12,7 +13,8 @@ PAGE_DASHBOARD = "매물 현황 리스트"
 PAGE_LISTING = "매물 등록·수정"
 PAGE_BUILDINGS = "건물·호실 관리"
 PAGE_CONTRACTS = "계약관리"
-PAGES = [PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS]
+PAGE_CONSULTATIONS = "상담관리"
+PAGES = [PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS, PAGE_CONSULTATIONS]
 
 st.set_page_config(page_title="매물관리", page_icon="🏠", layout="wide", initial_sidebar_state="collapsed")
 
@@ -58,8 +60,10 @@ def main() -> None:
         render_listing_form()
     elif st.session_state.selected_page == PAGE_BUILDINGS:
         render_building_management()
-    else:
+    elif st.session_state.selected_page == PAGE_CONTRACTS:
         render_contract_management()
+    else:
+        render_consultation_management()
 
 
 if __name__ == "__main__":

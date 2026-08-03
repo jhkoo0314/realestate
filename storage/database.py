@@ -149,6 +149,27 @@ FOR EACH ROW
 BEGIN
     UPDATE contracts SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
 END;
+
+CREATE TABLE IF NOT EXISTS consultations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL REFERENCES listings(id),
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    consulted_date TEXT NOT NULL,
+    consultation_type TEXT NOT NULL,
+    consultation_note TEXT NOT NULL,
+    next_contact_date TEXT,
+    consultation_status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TRIGGER IF NOT EXISTS consultations_set_updated_at
+AFTER UPDATE ON consultations
+FOR EACH ROW
+BEGIN
+    UPDATE consultations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
 """
 
 
@@ -176,6 +197,7 @@ def initialize_database(path: Path = DATABASE_PATH) -> None:
             connection.executescript(SCHEMA)
             _ensure_listing_photo_column(connection)
             _ensure_listing_contact_columns(connection)
+            _ensure_consultation_table(connection)
     finally:
         connection.close()
 
@@ -206,6 +228,7 @@ def ensure_database_schema(path: Path = DATABASE_PATH) -> None:
             _ensure_listing_photo_column(connection)
             _ensure_listing_contact_columns(connection)
             _ensure_contract_table(connection)
+            _ensure_consultation_table(connection)
     finally:
         connection.close()
 
@@ -245,6 +268,33 @@ def _ensure_contract_table(connection: sqlite3.Connection) -> None:
     ):
         if column not in columns:
             connection.execute(f"ALTER TABLE contracts ADD COLUMN {column} {column_type}")
+
+
+def _ensure_consultation_table(connection: sqlite3.Connection) -> None:
+    """기존 데이터 파일에도 상담 기록 표를 추가한다."""
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS consultations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id INTEGER NOT NULL REFERENCES listings(id),
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT NOT NULL,
+            consulted_date TEXT NOT NULL,
+            consultation_type TEXT NOT NULL,
+            consultation_note TEXT NOT NULL,
+            next_contact_date TEXT,
+            consultation_status TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TRIGGER IF NOT EXISTS consultations_set_updated_at
+        AFTER UPDATE ON consultations
+        FOR EACH ROW
+        BEGIN
+            UPDATE consultations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;
+        """
+    )
 
 
 def require_database(path: Path = DATABASE_PATH) -> None:
@@ -547,6 +597,103 @@ def update_contract_details(contract_id: int, values: dict[str, Any], path: Path
                 ),
             ).rowcount != 1:
                 raise ValueError("수정할 계약 기록을 찾을 수 없습니다.")
+    finally:
+        connection.close()
+
+
+def get_consultations(*, query: str = "", statuses: list[str] | None = None, due_only: bool = False, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """상담 목록을 읽는다. 고객 연락처는 목록 조회에 포함하지 않는다."""
+    ensure_database_schema(path)
+    conditions = ["b.is_active = 1", "u.is_active = 1"]
+    parameters: list[Any] = []
+    if keyword := query.strip():
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.customer_name LIKE ?)")
+        parameters.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+    if statuses:
+        placeholders = ", ".join("?" for _ in statuses)
+        conditions.append(f"c.consultation_status IN ({placeholders})")
+        parameters.extend(statuses)
+    if due_only:
+        conditions.extend(["c.next_contact_date IS NOT NULL", "c.next_contact_date <= ?", "c.consultation_status != '종료'"])
+        parameters.append(date.today().isoformat())
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT c.id AS consultation_id, c.listing_id, c.customer_name, c.consulted_date,
+                   c.consultation_type, c.consultation_note, c.next_contact_date, c.consultation_status,
+                   c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number,
+                   l.received_date, l.listing_status
+            FROM consultations c
+            JOIN listings l ON l.id = c.listing_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN buildings b ON b.id = u.building_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY c.consulted_date DESC, c.id DESC
+            """, parameters,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def get_consultation_detail(consultation_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
+    """상담 상세에서만 고객 연락처를 포함해 읽는다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """
+            SELECT c.id AS consultation_id, c.listing_id, c.customer_name, c.customer_phone,
+                   c.consulted_date, c.consultation_type, c.consultation_note, c.next_contact_date,
+                   c.consultation_status, b.building_name, b.lot_address, u.unit_number, l.received_date
+            FROM consultations c
+            JOIN listings l ON l.id = c.listing_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN buildings b ON b.id = u.building_id
+            WHERE c.id = ? AND b.is_active = 1 AND u.is_active = 1
+            """, (consultation_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        connection.close()
+
+
+def create_consultation(listing_id: int, consultation: dict[str, Any], path: Path = DATABASE_PATH) -> int:
+    """선택한 매물 회차에 새 상담 기록을 추가한다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM listings WHERE id = ?", (listing_id,)).fetchone() is None:
+                raise ValueError("연결할 매물 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
+            cursor = connection.execute(
+                """
+                INSERT INTO consultations (listing_id, customer_name, customer_phone, consulted_date, consultation_type, consultation_note, next_contact_date, consultation_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (listing_id, consultation["customer_name"], consultation["customer_phone"], consultation["consulted_date"], consultation["consultation_type"], consultation["consultation_note"], consultation.get("next_contact_date"), consultation["consultation_status"]),
+            )
+            return cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def update_consultation(consultation_id: int, values: dict[str, Any], path: Path = DATABASE_PATH) -> None:
+    """상담 기록을 지우지 않고 상세값을 수정한다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute(
+                """
+                UPDATE consultations
+                SET customer_name = ?, customer_phone = ?, consultation_note = ?, next_contact_date = ?, consultation_status = ?
+                WHERE id = ?
+                """,
+                (values["customer_name"], values["customer_phone"], values["consultation_note"], values.get("next_contact_date"), values["consultation_status"], consultation_id),
+            ).rowcount != 1:
+                raise ValueError("수정할 상담 기록을 찾을 수 없습니다.")
     finally:
         connection.close()
 
