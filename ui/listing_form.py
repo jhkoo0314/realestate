@@ -72,6 +72,16 @@ def _clear_selected_building() -> None:
     st.session_state.pop("registration_unit_number", None)
 
 
+def reset_for_new_listing() -> None:
+    """상단의 새 매물 등록을 눌렀을 때 이전 작업 흔적을 모두 지운다."""
+    _clear_registration_inputs()
+    _clear_selected_building()
+    st.session_state.pop("registration_building_search", None)
+    for key in list(st.session_state):
+        if key.startswith(("relisting_", "edit_", "close_reason", "close_date")):
+            st.session_state.pop(key, None)
+
+
 def _select_building(building: dict) -> None:
     st.session_state["selected_registration_building"] = building
     st.session_state.pop("pending_registration", None)
@@ -87,7 +97,14 @@ def _select_unit_for_relisting(unit_id: int) -> None:
 def _render_building_search() -> dict | None:
     st.markdown("#### 1. 먼저 기존 건물을 찾아보세요")
     st.caption("건물명 또는 지번을 2글자 이상 입력하면, 이미 등록된 건물을 먼저 보여 드립니다.")
-    query = st.text_input("건물명·지번 검색", key="registration_building_search", placeholder="예: 대성빌 또는 북수리 1026")
+    search_column, reset_column = st.columns([4, 1])
+    with search_column:
+        query = st.text_input("건물명·지번 검색", key="registration_building_search", placeholder="예: 대성빌 또는 북수리 1026")
+    with reset_column:
+        st.markdown("<div style='height: 1.75rem'></div>", unsafe_allow_html=True)
+        if st.button("검색 초기화", use_container_width=True):
+            reset_for_new_listing()
+            st.rerun()
     selected = _selected_building()
 
     if selected:

@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS listings (
     wallpaper_status TEXT,
     repair_status TEXT,
     photo_status TEXT,
+    has_listing_photos TEXT NOT NULL DEFAULT '확인 필요',
     ad_status TEXT,
     ad_channel_note TEXT,
     listing_note TEXT,
@@ -148,6 +149,27 @@ def initialize_database(path: Path = DATABASE_PATH) -> None:
     try:
         with connection:
             connection.executescript(SCHEMA)
+            _ensure_listing_photo_column(connection)
+    finally:
+        connection.close()
+
+
+def _ensure_listing_photo_column(connection: sqlite3.Connection) -> None:
+    """기존 데이터 파일에도 사진 보유 여부 칸을 안전하게 추가한다."""
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(listings)").fetchall()}
+    if "has_listing_photos" not in columns:
+        connection.execute(
+            "ALTER TABLE listings ADD COLUMN has_listing_photos TEXT NOT NULL DEFAULT '확인 필요'"
+        )
+
+
+def ensure_database_schema(path: Path = DATABASE_PATH) -> None:
+    """이미 존재하는 데이터 파일에 필요한 추가 칸만 만든다. 기존 기록은 바꾸지 않는다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            _ensure_listing_photo_column(connection)
     finally:
         connection.close()
 
@@ -163,7 +185,7 @@ def require_database(path: Path = DATABASE_PATH) -> None:
 
 def get_database_summary(path: Path = DATABASE_PATH) -> dict[str, int]:
     """첫 화면에서 사용할 안전한 건수만 돌려준다."""
-    require_database(path)
+    ensure_database_schema(path)
     connection = get_connection(path)
     try:
         return {
@@ -171,6 +193,106 @@ def get_database_summary(path: Path = DATABASE_PATH) -> dict[str, int]:
             "units": connection.execute("SELECT COUNT(*) FROM units").fetchone()[0],
             "listings": connection.execute("SELECT COUNT(*) FROM listings").fetchone()[0],
         }
+    finally:
+        connection.close()
+
+
+def get_current_listings(
+    *,
+    query: str = "",
+    received_start: str | None = None,
+    received_end: str | None = None,
+    statuses: list[str] | None = None,
+    room_types: list[str] | None = None,
+    photo_statuses: list[str] | None = None,
+    photo_availability: list[str] | None = None,
+    task_filter: str | None = None,
+    path: Path = DATABASE_PATH,
+) -> list[dict[str, Any]]:
+    """오늘의 현황에 표시할 현재 매물을 조건에 맞게 찾는다. 내부정보는 제외한다."""
+    ensure_database_schema(path)
+    conditions = ["l.closed_date IS NULL", "l.listing_status NOT IN ('계약 완료', '종료')", "u.is_active = 1", "b.is_active = 1"]
+    parameters: list[Any] = []
+    if keyword := query.strip():
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)")
+        parameters.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+    if received_start:
+        conditions.append("l.received_date >= ?")
+        parameters.append(received_start)
+    if received_end:
+        conditions.append("l.received_date <= ?")
+        parameters.append(received_end)
+    for column, values in (("l.listing_status", statuses), ("u.room_type", room_types), ("l.photo_status", photo_statuses), ("l.has_listing_photos", photo_availability)):
+        if values:
+            placeholders = ", ".join("?" for _ in values)
+            conditions.append(f"{column} IN ({placeholders})")
+            parameters.extend(values)
+
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT l.id AS listing_id, u.id AS unit_id, b.building_name, b.lot_address, u.unit_number,
+                   u.room_type, l.received_date, l.listing_status, l.deposit_manwon, l.monthly_rent_manwon,
+                   l.management_fee_manwon, l.availability_type, l.available_from_date, l.photo_status,
+                   l.has_listing_photos, l.cleaning_status, l.wallpaper_status, l.repair_status,
+                   l.next_check_date, l.listing_note, l.updated_at
+            FROM listings l
+            JOIN units u ON u.id = l.unit_id
+            JOIN buildings b ON b.id = u.building_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY l.received_date DESC, l.updated_at DESC, l.id DESC
+            """,
+            parameters,
+        ).fetchall()
+        listings = [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+    today = date.today().isoformat()
+    for listing in listings:
+        tasks: list[str] = []
+        if listing["next_check_date"] and listing["next_check_date"] <= today:
+            tasks.append("재확인 필요")
+        if listing["photo_status"] == "촬영 필요" or listing["has_listing_photos"] == "없음":
+            tasks.append("사진 촬영 필요")
+        if any(listing[field] in ("필요", "진행 중") for field in ("cleaning_status", "wallpaper_status", "repair_status")):
+            tasks.append("현장 상태 확인 필요")
+        if listing["availability_type"] == "확인 필요":
+            tasks.append("입주 가능일 확인 필요")
+        if listing["listing_status"] == "확인 필요":
+            tasks.append("매물 상태 확인 필요")
+        listing["tasks"] = tasks
+    if task_filter:
+        listings = [listing for listing in listings if task_filter in listing["tasks"]]
+    return listings
+
+
+def update_listing_quick_fields(
+    listing_id: int,
+    listing_status: str,
+    photo_status: str,
+    has_listing_photos: str,
+    next_check_date: str | None,
+    path: Path = DATABASE_PATH,
+) -> None:
+    """오늘의 현황에서 자주 바꾸는 값만 현재 매물 회차에 저장한다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute(
+                "SELECT 1 FROM listings WHERE id = ? AND closed_date IS NULL", (listing_id,)
+            ).fetchone() is None:
+                raise ValueError("수정할 현재 매물을 찾을 수 없습니다.")
+            connection.execute(
+                """
+                UPDATE listings
+                SET listing_status = ?, photo_status = ?, has_listing_photos = ?, next_check_date = ?
+                WHERE id = ?
+                """,
+                (listing_status, photo_status, has_listing_photos, next_check_date, listing_id),
+            )
     finally:
         connection.close()
 

@@ -4,7 +4,7 @@ import streamlit as st
 
 from ui.building_management import render_building_management
 from ui.dashboard import render_dashboard
-from ui.listing_form import render_listing_form
+from ui.listing_form import render_listing_form, reset_for_new_listing
 
 
 PAGE_DASHBOARD = "오늘의 매물 현황"
@@ -16,6 +16,7 @@ st.set_page_config(page_title="매물관리", page_icon="🏠", layout="wide", i
 
 
 def go_to_listing() -> None:
+    reset_for_new_listing()
     st.session_state.selected_page = PAGE_LISTING
 
 
@@ -46,7 +47,7 @@ def main() -> None:
         st.button("＋ 새 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
 
     st.radio("주요 메뉴", PAGES, horizontal=True, key="selected_page", label_visibility="collapsed")
-    st.markdown("<div class='status-line'>실행 상태: 신규 매물 등록 가능 · 기존 건물 검색과 재등록은 다음 단계에서 연결합니다.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 오늘의 매물 현황에서 검색과 확인 업무를 볼 수 있습니다.</div>", unsafe_allow_html=True)
 
     if st.session_state.selected_page == PAGE_DASHBOARD:
         render_dashboard(go_to_listing)
