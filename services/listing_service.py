@@ -5,7 +5,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.database import save_first_listing
+from storage.database import (
+    find_building_by_identity,
+    save_first_listing,
+    save_first_listing_for_existing_building,
+    save_new_listing_round,
+    update_current_listing,
+    close_current_listing,
+)
 
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
@@ -70,7 +77,6 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "direction": raw.get("direction"),
             "access_method": raw.get("access_method"),
             "unit_access_password": _clean_text(raw.get("unit_access_password")),
-            "photo_folder_url": _clean_text(raw.get("photo_folder_url")),
             "unit_highlights": _clean_text(raw.get("unit_highlights")),
         },
         "listing": {
@@ -90,9 +96,106 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     return payload, []
 
 
+def validate_new_building_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any]] | None, list[str]]:
+    """새 건물 등록 전, 같은 건물은 기존 건물 선택으로 안내한다."""
+    payload, errors = validate_first_listing(raw)
+    if errors or payload is None:
+        return payload, errors
+
+    existing = find_building_by_identity(
+        payload["building"]["building_name"], payload["building"]["lot_address"]
+    )
+    if existing:
+        return None, [
+            f"{existing['building_name']} · {existing['lot_address']}은(는) 이미 등록되어 있습니다. "
+            "위 검색 결과에서 기존 건물을 선택해 새 호실을 등록해 주세요."
+        ]
+    return payload, []
+
+
 def save_confirmed_first_listing(payload: dict[str, dict[str, Any]]) -> tuple[int, int, int]:
     """확인된 입력만 데이터 저장소에 전달한다."""
     return save_first_listing(payload["building"], payload["unit"], payload["listing"])
+
+
+def save_confirmed_existing_building_listing(
+    building_id: int, payload: dict[str, dict[str, Any]]
+) -> tuple[int, int]:
+    """선택한 기존 건물에 새 호실과 첫 매물을 저장한다."""
+    return save_first_listing_for_existing_building(building_id, payload["unit"], payload["listing"])
+
+
+def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    """재등록할 이번 매물 조건만 검사한다. 이전 회차 값은 바꾸지 않는다."""
+    errors: list[str] = []
+    listing_status = raw.get("listing_status")
+    availability_type = raw.get("availability_type")
+    available_from_date = raw.get("available_from_date")
+    price_mode = raw.get("price_mode")
+    deposit = raw.get("deposit_manwon")
+    rent = raw.get("monthly_rent_manwon")
+
+    if not listing_status:
+        errors.append("매물 상태를 선택해 주세요.")
+    if not availability_type:
+        errors.append("입주 가능 유형을 선택해 주세요.")
+    if availability_type == "날짜 지정" and not available_from_date:
+        errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
+    if price_mode == "새 가격 입력":
+        if deposit is None or deposit <= 0:
+            errors.append("보증금은 0보다 큰 숫자로 입력해 주세요.")
+        if rent is None or rent <= 0:
+            errors.append("월세는 0보다 큰 숫자로 입력해 주세요.")
+    if errors:
+        return None, errors
+
+    note = _clean_text(raw.get("listing_note"))
+    verification_note = None
+    if price_mode == "가격 확인 필요":
+        verification_note = "보증금·월세 확인 필요"
+        note = f"{note}\n가격 확인 필요" if note else "가격 확인 필요"
+        deposit = None
+        rent = None
+
+    return {
+        "received_date": _date_text(raw.get("received_date")) or date.today().isoformat(),
+        "listing_status": listing_status,
+        "deposit_manwon": int(deposit) if deposit is not None else None,
+        "monthly_rent_manwon": int(rent) if rent is not None else None,
+        "management_fee_manwon": raw.get("management_fee_manwon"),
+        "availability_type": availability_type,
+        "available_from_date": _date_text(available_from_date),
+        "move_out_due_date": _date_text(raw.get("move_out_due_date")),
+        "photo_status": raw.get("photo_status"),
+        "listing_note": note,
+        "next_check_date": _date_text(raw.get("next_check_date")),
+        "verification_note": verification_note,
+    }, []
+
+
+def save_confirmed_relisting(unit_id: int, listing: dict[str, Any]) -> int:
+    """기존 호실에 새 매물 회차를 추가한다."""
+    return save_new_listing_round(unit_id, listing)
+
+
+def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    """현재 매물의 수정값을 검사한다. 새 회차는 만들지 않는다."""
+    raw = {**raw, "price_mode": "새 가격 입력"}
+    listing, errors = validate_relisting(raw)
+    if errors or listing is None:
+        return listing, errors
+    listing["last_photo_date"] = _date_text(raw.get("last_photo_date"))
+    return listing, []
+
+
+def save_current_listing_changes(listing_id: int, listing: dict[str, Any]) -> None:
+    """검사된 수정값을 현재 매물 회차에 한 번에 저장한다."""
+    update_current_listing(listing_id, listing)
+
+
+def close_listing(listing_id: int, close_date: date, close_reason: str) -> None:
+    """현재 매물을 종료 처리하고 기록은 남긴다."""
+    close_current_listing(listing_id, close_date.isoformat(), close_reason)
 
 
 def listing_summary(payload: dict[str, dict[str, Any]]) -> str:

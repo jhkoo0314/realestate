@@ -65,7 +65,6 @@ CREATE TABLE IF NOT EXISTS units (
     internal_note TEXT,
     access_method TEXT,
     unit_access_password TEXT,
-    photo_folder_url TEXT,
     last_photo_date TEXT,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -176,6 +175,250 @@ def get_database_summary(path: Path = DATABASE_PATH) -> dict[str, int]:
         connection.close()
 
 
+def search_buildings(query: str, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """건물명 또는 지번으로 기존 건물을 찾는다. 내부정보는 돌려주지 않는다."""
+    require_database(path)
+    keyword = query.strip()
+    if not keyword:
+        return []
+
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT b.id, b.building_name, b.lot_address, b.admin_address, b.road_address,
+                   b.has_elevator, b.parking_status, COUNT(u.id) AS unit_count
+            FROM buildings b
+            LEFT JOIN units u ON u.building_id = b.id AND u.is_active = 1
+            WHERE b.is_active = 1
+              AND (b.building_name LIKE ? OR b.lot_address LIKE ?)
+            GROUP BY b.id
+            ORDER BY b.building_name, b.lot_address
+            """,
+            (f"%{keyword}%", f"%{keyword}%"),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def find_building_by_identity(
+    building_name: str, lot_address: str, path: Path = DATABASE_PATH
+) -> dict[str, Any] | None:
+    """건물명과 지번이 모두 같은 기존 건물을 찾는다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """
+            SELECT id, building_name, lot_address
+            FROM buildings
+            WHERE building_name = ? AND lot_address = ? AND is_active = 1
+            """,
+            (building_name.strip(), lot_address.strip()),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        connection.close()
+
+
+def get_building_units(building_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """선택한 건물의 등록 호실을 보여 준다. 비밀번호·내부 메모는 제외한다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT u.id, u.unit_number, u.room_type, u.floor_number, u.direction,
+                   l.deposit_manwon, l.monthly_rent_manwon, l.listing_status, l.received_date
+            FROM units u
+            LEFT JOIN listings l ON l.id = (
+                SELECT id FROM listings WHERE unit_id = u.id ORDER BY received_date DESC, id DESC LIMIT 1
+            )
+            WHERE u.building_id = ? AND u.is_active = 1
+            ORDER BY unit_number_normalized
+            """,
+            (building_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def get_unit_relisting_context(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
+    """재등록 화면에 필요한 고정정보를 읽는다. 비밀번호와 내부 메모는 제외한다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """
+            SELECT u.id AS unit_id, u.unit_number, u.floor_number, u.room_type, u.direction,
+                   u.unit_options, u.access_method, u.unit_highlights,
+                   b.id AS building_id, b.building_name, b.lot_address, b.admin_address,
+                   b.road_address, b.has_elevator, b.parking_status
+            FROM units u JOIN buildings b ON b.id = u.building_id
+            WHERE u.id = ? AND u.is_active = 1 AND b.is_active = 1
+            """,
+            (unit_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        connection.close()
+
+
+def get_unit_listing_history(unit_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """한 호실의 이전 매물 기록을 최신순으로 읽는다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT id, received_date, listing_status, deposit_manwon, monthly_rent_manwon,
+                   management_fee_manwon, availability_type, available_from_date, closed_date
+            FROM listings WHERE unit_id = ?
+            ORDER BY received_date DESC, id DESC
+            """,
+            (unit_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def has_active_listing(unit_id: int, path: Path = DATABASE_PATH) -> bool:
+    """종료되지 않은 최근 매물이 있는지 확인한다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        return connection.execute(
+            """
+            SELECT 1 FROM listings
+            WHERE unit_id = ? AND closed_date IS NULL
+              AND listing_status NOT IN ('계약 완료', '종료')
+            LIMIT 1
+            """,
+            (unit_id,),
+        ).fetchone() is not None
+    finally:
+        connection.close()
+
+
+def get_current_listing(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
+    """수정할 현재 매물 회차를 최신 활성 기록으로 찾는다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """
+            SELECT id, unit_id, received_date, listing_status, deposit_manwon, monthly_rent_manwon,
+                   management_fee_manwon, availability_type, available_from_date, move_out_due_date,
+                   photo_status, listing_note, next_check_date
+            FROM listings
+            WHERE unit_id = ? AND closed_date IS NULL
+              AND listing_status NOT IN ('계약 완료', '종료')
+            ORDER BY received_date DESC, id DESC LIMIT 1
+            """,
+            (unit_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        connection.close()
+
+
+def update_current_listing(
+    listing_id: int, listing: dict[str, Any], path: Path = DATABASE_PATH
+) -> None:
+    """현재 매물 한 회차의 조건만 한 번에 수정한다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            row = connection.execute(
+                "SELECT unit_id FROM listings WHERE id = ? AND closed_date IS NULL", (listing_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("수정할 현재 매물을 찾을 수 없습니다.")
+            connection.execute(
+                """
+                UPDATE listings SET
+                    listing_status = ?, deposit_manwon = ?, monthly_rent_manwon = ?, management_fee_manwon = ?,
+                    availability_type = ?, available_from_date = ?, move_out_due_date = ?, photo_status = ?,
+                    listing_note = ?, next_check_date = ?
+                WHERE id = ?
+                """,
+                (
+                    listing["listing_status"], listing["deposit_manwon"], listing["monthly_rent_manwon"],
+                    listing.get("management_fee_manwon"), listing["availability_type"],
+                    listing.get("available_from_date"), listing.get("move_out_due_date"), listing.get("photo_status"),
+                    listing.get("listing_note"), listing.get("next_check_date"), listing_id,
+                ),
+            )
+            if listing.get("photo_status") == "촬영 완료" and listing.get("last_photo_date"):
+                connection.execute(
+                    "UPDATE units SET last_photo_date = ? WHERE id = ?",
+                    (listing["last_photo_date"], row["unit_id"]),
+                )
+    finally:
+        connection.close()
+
+
+def close_current_listing(
+    listing_id: int, close_date: str, close_reason: str, path: Path = DATABASE_PATH
+) -> None:
+    """매물 기록을 지우지 않고 종료일과 종료 사유를 남긴다."""
+    if not close_reason:
+        raise ValueError("종료 사유를 선택해 주세요.")
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            row = connection.execute(
+                "SELECT id FROM listings WHERE id = ? AND closed_date IS NULL", (listing_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("종료할 현재 매물을 찾을 수 없습니다.")
+            final_status = "계약 완료" if close_reason == "계약 완료" else "종료"
+            connection.execute(
+                """
+                UPDATE listings SET listing_status = ?, closed_date = ?, close_reason = ? WHERE id = ?
+                """,
+                (final_status, close_date, close_reason, listing_id),
+            )
+    finally:
+        connection.close()
+
+
+def deactivate_unit(unit_id: int, path: Path = DATABASE_PATH) -> None:
+    """호실을 삭제하지 않고 비활성화한다."""
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("UPDATE units SET is_active = 0 WHERE id = ?", (unit_id,)).rowcount != 1:
+                raise ValueError("비활성화할 호실을 찾을 수 없습니다.")
+    finally:
+        connection.close()
+
+
+def building_has_unit(building_id: int, unit_number: str, path: Path = DATABASE_PATH) -> bool:
+    """302와 302호를 같은 호실로 비교한다."""
+    normalized = normalize_unit_number(unit_number)
+    if not normalized:
+        return False
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        return connection.execute(
+            """
+            SELECT 1 FROM units
+            WHERE building_id = ? AND unit_number_normalized = ? AND is_active = 1
+            """,
+            (building_id, normalized),
+        ).fetchone() is not None
+    finally:
+        connection.close()
+
+
 def save_first_listing(
     building: dict[str, Any], unit: dict[str, Any], listing: dict[str, Any], path: Path = DATABASE_PATH
 ) -> tuple[int, int, int]:
@@ -237,8 +480,8 @@ def save_first_listing(
                 """
                 INSERT INTO units (
                     building_id, unit_number, unit_number_normalized, floor_number, room_type, direction,
-                    unit_highlights, access_method, unit_access_password, photo_folder_url
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    unit_highlights, access_method, unit_access_password
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     building_id,
@@ -250,7 +493,6 @@ def save_first_listing(
                     unit.get("unit_highlights"),
                     unit.get("access_method"),
                     unit.get("unit_access_password"),
-                    unit.get("photo_folder_url"),
                 ),
             )
             unit_id = cursor.lastrowid
@@ -279,5 +521,121 @@ def save_first_listing(
                 ),
             )
             return building_id, unit_id, cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def save_first_listing_for_existing_building(
+    building_id: int, unit: dict[str, Any], listing: dict[str, Any], path: Path = DATABASE_PATH
+) -> tuple[int, int]:
+    """기존 건물에는 새 호실과 첫 매물만 함께 저장한다.
+
+    저장 직전에 다시 중복을 확인해, 화면을 오래 열어 둔 경우에도 같은 호실이
+    두 번 만들어지는 일을 막는다.
+    """
+    required_values = {
+        "호수": unit.get("unit_number"),
+        "매물 상태": listing.get("listing_status"),
+        "입주 가능 유형": listing.get("availability_type"),
+    }
+    missing = [label for label, value in required_values.items() if not value]
+    if missing:
+        raise ValueError(f"필수 항목이 비어 있습니다: {', '.join(missing)}")
+    for label, value in {"보증금": listing.get("deposit_manwon"), "월세": listing.get("monthly_rent_manwon")}.items():
+        if not isinstance(value, int) or value < 0:
+            raise ValueError(f"{label}은 0 이상의 숫자여야 합니다.")
+    if listing["availability_type"] == "날짜 지정" and not listing.get("available_from_date"):
+        raise ValueError("입주 가능 유형이 날짜 지정이면 입주 가능일이 필요합니다.")
+
+    require_database(path)
+    normalized_unit = normalize_unit_number(str(unit["unit_number"]))
+    if not normalized_unit:
+        raise ValueError("호수를 확인해 주세요.")
+
+    connection = get_connection(path)
+    try:
+        with connection:
+            building = connection.execute(
+                "SELECT id FROM buildings WHERE id = ? AND is_active = 1", (building_id,)
+            ).fetchone()
+            if building is None:
+                raise ValueError("선택한 건물을 찾을 수 없습니다. 다시 검색해 주세요.")
+            if connection.execute(
+                "SELECT 1 FROM units WHERE building_id = ? AND unit_number_normalized = ?",
+                (building_id, normalized_unit),
+            ).fetchone():
+                unit_label = str(unit["unit_number"]).strip()
+                if not unit_label.endswith("호"):
+                    unit_label = f"{unit_label}호"
+                raise ValueError(f"{unit_label}는 이미 등록된 호실입니다. 기존 호실을 선택해 주세요.")
+
+            cursor = connection.execute(
+                """
+                INSERT INTO units (
+                    building_id, unit_number, unit_number_normalized, floor_number, room_type, direction,
+                    unit_highlights, access_method, unit_access_password
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    building_id, str(unit["unit_number"]).strip(), normalized_unit, unit.get("floor_number"),
+                    unit.get("room_type"), unit.get("direction"), unit.get("unit_highlights"),
+                    unit.get("access_method"), unit.get("unit_access_password"),
+                ),
+            )
+            unit_id = cursor.lastrowid
+            cursor = connection.execute(
+                """
+                INSERT INTO listings (
+                    unit_id, received_date, listing_status, deposit_manwon, monthly_rent_manwon,
+                    management_fee_manwon, availability_type, available_from_date, move_out_due_date,
+                    photo_status, listing_note, next_check_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    unit_id, listing.get("received_date", date.today().isoformat()), listing["listing_status"],
+                    listing["deposit_manwon"], listing["monthly_rent_manwon"], listing.get("management_fee_manwon"),
+                    listing["availability_type"], listing.get("available_from_date"), listing.get("move_out_due_date"),
+                    listing.get("photo_status"), listing.get("listing_note"), listing.get("next_check_date"),
+                ),
+            )
+            return unit_id, cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def save_new_listing_round(
+    unit_id: int, listing: dict[str, Any], path: Path = DATABASE_PATH
+) -> int:
+    """기존 호실의 과거 기록을 건드리지 않고 새 매물 회차만 추가한다."""
+    required = {"매물 상태": listing.get("listing_status"), "입주 가능 유형": listing.get("availability_type")}
+    missing = [label for label, value in required.items() if not value]
+    if missing:
+        raise ValueError(f"필수 항목이 비어 있습니다: {', '.join(missing)}")
+    if listing["availability_type"] == "날짜 지정" and not listing.get("available_from_date"):
+        raise ValueError("입주 가능 유형이 날짜 지정이면 입주 가능일이 필요합니다.")
+
+    require_database(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM units WHERE id = ? AND is_active = 1", (unit_id,)).fetchone() is None:
+                raise ValueError("선택한 호실을 찾을 수 없습니다. 다시 선택해 주세요.")
+            cursor = connection.execute(
+                """
+                INSERT INTO listings (
+                    unit_id, received_date, listing_status, deposit_manwon, monthly_rent_manwon,
+                    management_fee_manwon, availability_type, available_from_date, move_out_due_date,
+                    photo_status, listing_note, next_check_date, verification_note
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    unit_id, listing.get("received_date", date.today().isoformat()), listing["listing_status"],
+                    listing.get("deposit_manwon"), listing.get("monthly_rent_manwon"), listing.get("management_fee_manwon"),
+                    listing["availability_type"], listing.get("available_from_date"), listing.get("move_out_due_date"),
+                    listing.get("photo_status"), listing.get("listing_note"), listing.get("next_check_date"),
+                    listing.get("verification_note"),
+                ),
+            )
+            return cursor.lastrowid
     finally:
         connection.close()
