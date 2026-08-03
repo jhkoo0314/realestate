@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.database import create_consultation, update_consultation
+from storage.consultation_repository import create_consultation, update_consultation
 
 
 CONSULTATION_TYPES = ["전화", "문자", "방문", "기타"]

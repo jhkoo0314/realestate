@@ -406,6 +406,31 @@ C:\realestate\
 
 ---
 
+## 단계 13 — 데이터 저장 코드 기능별 분리
+
+목표: 실제 데이터 파일 `storage/real_estate.db`는 하나로 유지하고, 너무 커진 `storage/database.py`의 기능 코드를 업무별 파일로 나눠 유지보수를 쉽게 한다.
+
+### 분리 원칙
+
+- [x] SQLite 데이터 파일은 계속 하나만 사용한다. 건물·호실·매물·계약·상담 기록을 서로 다른 데이터 파일로 나누지 않는다.
+- [x] `storage/database.py`에는 공통 연결, 표 생성·업데이트, 기존 데이터 파일에 새 칸을 안전하게 추가하는 기능만 남긴다.
+- [x] 매물 등록·수정·조회는 `storage/listing_repository.py`, `storage/listing_write_repository.py`, `storage/listing_create_repository.py`로 분리한다.
+- [x] 건물·호실 검색·상세·수정은 `storage/building_repository.py`로 분리한다.
+- [x] 계약 등록·조회·수정은 `storage/contract_repository.py`로 분리한다.
+- [x] 상담 등록·조회·수정은 `storage/consultation_repository.py`로 분리한다.
+- [x] 엑셀용 매물 데이터 조회는 `storage/export_repository.py`로 분리한다.
+- [x] 화면과 서비스 코드는 필요한 기능 파일만 불러오도록 바꾼다.
+
+### 안전 규칙과 완료 기준
+
+- [x] 정리 작업 중 기존 `real_estate.db` 파일을 새로 만들거나 덮어쓰지 않는다.
+- [x] 표 이름, 기존 열 이름, 저장 규칙과 화면 동작을 바꾸지 않는다.
+- [x] 한 기능 파일을 옮길 때마다 기존 저장·조회 자동 확인을 다시 실행한다.
+- [ ] 분리 전후에 같은 데이터 파일의 건물·호실·매물·계약·상담 건수가 같음을 확인한다. (실제 운영 데이터는 안전을 위해 이번 코드 정리에서 열지 않음)
+- [x] 기존 데이터가 그대로 보이고, 신규 등록·수정·계약·상담·엑셀 내보내기가 기존과 동일하게 동작한다.
+
+---
+
 ## 3-1. 단계별 상세 구현계획과 테스트
 
 ### 공통 진행 원칙

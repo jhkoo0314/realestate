@@ -7,11 +7,10 @@ from datetime import date
 import streamlit as st
 
 from services.listing_service import ROOM_TYPES
-from storage.database import (
+from storage.building_repository import (
     get_building_management_detail,
     get_building_password,
     get_building_units,
-    get_contracts,
     get_unit_listing_history,
     get_unit_management_detail,
     get_unit_password,
@@ -20,6 +19,7 @@ from storage.database import (
     update_current_listing_option_note,
     update_unit_management_detail,
 )
+from storage.contract_repository import get_contracts
 
 
 INFO_STATUSES = ["기본등록", "일부확인", "확인완료", "재확인 필요"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.database import create_contract, update_contract_details, update_contract_status
+from storage.contract_repository import create_contract, update_contract_details, update_contract_status
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]

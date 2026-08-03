@@ -7,7 +7,8 @@ from datetime import date
 import streamlit as st
 
 from services.consultation_service import CONSULTATION_STATUSES, CONSULTATION_TYPES, save_consultation, save_consultation_changes, validate_consultation
-from storage.database import get_consultation_detail, get_consultations, search_listing_rounds
+from storage.consultation_repository import get_consultation_detail, get_consultations
+from storage.listing_repository import search_listing_rounds
 
 
 def _listing_label(item: dict) -> str:

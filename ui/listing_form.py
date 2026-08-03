@@ -20,16 +20,9 @@ from services.listing_service import (
     validate_relisting,
     validate_current_listing,
 )
-from storage.database import (
-    building_has_unit,
-    get_building_units,
-    get_unit_listing_history,
-    get_unit_relisting_context,
-    get_current_listing,
-    has_active_listing,
-    deactivate_unit,
-    search_buildings,
-)
+from storage.building_repository import get_building_units, get_unit_listing_history, search_buildings
+from storage.listing_create_repository import building_has_unit
+from storage.listing_write_repository import deactivate_unit, get_current_listing, get_unit_relisting_context, has_active_listing
 
 
 INPUT_KEYS = [
