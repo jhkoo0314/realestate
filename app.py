@@ -26,11 +26,12 @@ def go_to_listing() -> None:
 
 def apply_styles() -> None:
     st.markdown("""<style>
-    .block-container { max-width: 1440px; padding-top: 2rem; padding-bottom: 3rem; }
+    header[data-testid="stHeader"] { visibility: hidden; height: 0rem; }
+    .block-container { max-width: 1440px; padding-top: 1rem; padding-bottom: 2.5rem; }
     [data-testid="stSidebar"] { display: none; }
-    .app-title { font-size: 1.65rem; font-weight: 700; margin: 0; }
-    .app-subtitle, .section-note { color: #667085; font-size: 0.93rem; margin-top: 0.2rem; }
-    .status-line { color: #475467; font-size: 0.88rem; padding: 0.65rem 0.85rem; background: #f8fafc; border: 1px solid #e4e7ec; border-radius: 0.45rem; margin: 0.8rem 0 1.4rem; }
+    .app-title { font-size: 1.5rem; font-weight: 700; margin: 0; line-height: 1.3; }
+    .app-subtitle, .section-note { color: #667085; font-size: 0.88rem; margin-top: 0.15rem; }
+    .status-line { color: #475467; font-size: 0.88rem; padding: 0.6rem 0.85rem; background: #f8fafc; border: 1px solid #e4e7ec; border-radius: 0.45rem; margin: 0.75rem 0 1.25rem; }
     .empty-panel { border: 1px solid #d0d5dd; border-radius: 0.65rem; background: #ffffff; padding: 2.3rem 1.8rem; text-align: center; margin-top: 1.25rem; }
     .empty-panel h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
     .empty-panel p { color: #475467; margin: 0; }
