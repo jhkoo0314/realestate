@@ -3,6 +3,7 @@
 import streamlit as st
 
 from ui.building_management import render_building_management
+from ui.contract_management import render_contract_management
 from ui.dashboard import render_dashboard
 from ui.listing_form import render_listing_form, reset_for_new_listing
 
@@ -10,7 +11,8 @@ from ui.listing_form import render_listing_form, reset_for_new_listing
 PAGE_DASHBOARD = "매물 현황 리스트"
 PAGE_LISTING = "매물 등록·수정"
 PAGE_BUILDINGS = "건물·호실 관리"
-PAGES = [PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS]
+PAGE_CONTRACTS = "계약관리"
+PAGES = [PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS]
 
 st.set_page_config(page_title="매물관리", page_icon="🏠", layout="wide", initial_sidebar_state="collapsed")
 
@@ -44,7 +46,8 @@ def main() -> None:
     with title_column:
         st.markdown("<p class='app-title'>🏠 매물관리</p><p class='app-subtitle'>사무실 내부용 · 원룸·투룸 매물 관리</p>", unsafe_allow_html=True)
     with action_column:
-        st.button("＋ 새 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
+        if st.session_state.selected_page != PAGE_BUILDINGS:
+            st.button("＋ 새 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
 
     st.radio("주요 메뉴", PAGES, horizontal=True, key="selected_page", label_visibility="collapsed")
     st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 매물 현황 리스트에서 조회·필터와 확인 업무를 처리할 수 있습니다.</div>", unsafe_allow_html=True)
@@ -53,8 +56,10 @@ def main() -> None:
         render_dashboard(go_to_listing)
     elif st.session_state.selected_page == PAGE_LISTING:
         render_listing_form()
-    else:
+    elif st.session_state.selected_page == PAGE_BUILDINGS:
         render_building_management()
+    else:
+        render_contract_management()
 
 
 if __name__ == "__main__":

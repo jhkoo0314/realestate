@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -126,6 +126,29 @@ FOR EACH ROW
 BEGIN
     UPDATE listings SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
 END;
+
+CREATE TABLE IF NOT EXISTS contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL REFERENCES listings(id),
+    contract_type TEXT NOT NULL,
+    contract_start_date TEXT NOT NULL,
+    contract_end_date TEXT,
+    term_months INTEGER,
+    contract_status TEXT NOT NULL,
+    contract_note TEXT,
+    contractor_contact TEXT,
+    contract_deposit_manwon INTEGER,
+    balance_manwon INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TRIGGER IF NOT EXISTS contracts_set_updated_at
+AFTER UPDATE ON contracts
+FOR EACH ROW
+BEGIN
+    UPDATE contracts SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
 """
 
 
@@ -182,8 +205,46 @@ def ensure_database_schema(path: Path = DATABASE_PATH) -> None:
         with connection:
             _ensure_listing_photo_column(connection)
             _ensure_listing_contact_columns(connection)
+            _ensure_contract_table(connection)
     finally:
         connection.close()
+
+
+def _ensure_contract_table(connection: sqlite3.Connection) -> None:
+    """기존 데이터 파일에도 계약 기록 표와 수정일 기록 규칙을 안전하게 추가한다."""
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS contracts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id INTEGER NOT NULL REFERENCES listings(id),
+            contract_type TEXT NOT NULL,
+            contract_start_date TEXT NOT NULL,
+            contract_end_date TEXT,
+            term_months INTEGER,
+            contract_status TEXT NOT NULL,
+            contract_note TEXT,
+            contractor_contact TEXT,
+            contract_deposit_manwon INTEGER,
+            balance_manwon INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TRIGGER IF NOT EXISTS contracts_set_updated_at
+        AFTER UPDATE ON contracts
+        FOR EACH ROW
+        BEGIN
+            UPDATE contracts SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+        END;
+        """
+    )
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(contracts)").fetchall()}
+    for column, column_type in (
+        ("contractor_contact", "TEXT"),
+        ("contract_deposit_manwon", "INTEGER"),
+        ("balance_manwon", "INTEGER"),
+    ):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE contracts ADD COLUMN {column} {column_type}")
 
 
 def require_database(path: Path = DATABASE_PATH) -> None:
@@ -324,6 +385,168 @@ def get_current_listing_export_rows(
             listing_ids,
         ).fetchall()
         return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """계약을 연결할 과거·현재 매물 회차를 건물명·지번·호수로 찾는다."""
+    ensure_database_schema(path)
+    keyword = query.strip()
+    if not keyword:
+        return []
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT l.id AS listing_id, l.received_date, l.listing_status, l.closed_date,
+                   b.building_name, b.lot_address, u.unit_number, u.room_type
+            FROM listings l
+            JOIN units u ON u.id = l.unit_id
+            JOIN buildings b ON b.id = u.building_id
+            WHERE b.is_active = 1 AND u.is_active = 1
+              AND (b.building_name LIKE ? OR b.lot_address LIKE ?
+                   OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)
+            ORDER BY l.received_date DESC, l.id DESC
+            LIMIT 50
+            """,
+            (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def get_contracts(
+    *,
+    query: str = "",
+    statuses: list[str] | None = None,
+    end_start: str | None = None,
+    end_end: str | None = None,
+    expiring_within_days: int | None = None,
+    unit_id: int | None = None,
+    path: Path = DATABASE_PATH,
+) -> list[dict[str, Any]]:
+    """계약 목록을 매물 회차 정보와 함께 읽는다. 계약자 개인정보는 읽지 않는다."""
+    ensure_database_schema(path)
+    conditions = ["b.is_active = 1", "u.is_active = 1"]
+    parameters: list[Any] = []
+    if keyword := query.strip():
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ?)")
+        parameters.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+    if statuses:
+        placeholders = ", ".join("?" for _ in statuses)
+        conditions.append(f"c.contract_status IN ({placeholders})")
+        parameters.extend(statuses)
+    if end_start:
+        conditions.append("c.contract_end_date >= ?")
+        parameters.append(end_start)
+    if end_end:
+        conditions.append("c.contract_end_date <= ?")
+        parameters.append(end_end)
+    if expiring_within_days is not None:
+        if expiring_within_days < 0:
+            raise ValueError("계약 만료 예정 기간은 0일 이상이어야 합니다.")
+        today = date.today()
+        deadline = (today + timedelta(days=expiring_within_days)).isoformat()
+        conditions.extend([
+            "c.contract_end_date IS NOT NULL",
+            "c.contract_end_date >= ?",
+            "c.contract_end_date <= ?",
+            "c.contract_status NOT IN ('해지', '만료')",
+        ])
+        parameters.extend([today.isoformat(), deadline])
+    if unit_id is not None:
+        conditions.append("u.id = ?")
+        parameters.append(unit_id)
+    connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT c.id AS contract_id, c.listing_id, c.contract_type, c.contract_start_date,
+                   c.contract_end_date, c.term_months, c.contract_status, c.contract_note,
+                   c.contractor_contact, c.contract_deposit_manwon, c.balance_manwon,
+                   c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number,
+                   l.received_date, l.listing_status
+            FROM contracts c
+            JOIN listings l ON l.id = c.listing_id
+            JOIN units u ON u.id = l.unit_id
+            JOIN buildings b ON b.id = u.building_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY c.contract_start_date DESC, c.id DESC
+            """,
+            parameters,
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
+def get_unit_contracts(unit_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    """건물·호실 관리 화면에서 보여 줄 호실별 계약 이력이다. 수정은 하지 않는다."""
+    return get_contracts(unit_id=unit_id, path=path)
+
+
+def create_contract(listing_id: int, contract: dict[str, Any], path: Path = DATABASE_PATH) -> int:
+    """선택한 매물 회차에 새 계약 기록을 추가한다. 기존 계약은 바꾸지 않는다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM listings WHERE id = ?", (listing_id,)).fetchone() is None:
+                raise ValueError("연결할 매물 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
+            cursor = connection.execute(
+                """
+                INSERT INTO contracts (
+                    listing_id, contract_type, contract_start_date, contract_end_date,
+                    term_months, contract_status, contract_note, contractor_contact,
+                    contract_deposit_manwon, balance_manwon
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    listing_id, contract["contract_type"], contract["contract_start_date"],
+                    contract.get("contract_end_date"), contract.get("term_months"),
+                    contract["contract_status"], contract.get("contract_note"), contract.get("contractor_contact"),
+                    contract.get("contract_deposit_manwon"), contract.get("balance_manwon"),
+                ),
+            )
+            return cursor.lastrowid
+    finally:
+        connection.close()
+
+
+def update_contract_status(contract_id: int, contract_status: str, path: Path = DATABASE_PATH) -> None:
+    """계약을 지우지 않고 상태만 바꿔 해지·만료 이력을 보존한다."""
+    if not contract_status:
+        raise ValueError("계약 상태를 선택해 주세요.")
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("UPDATE contracts SET contract_status = ? WHERE id = ?", (contract_status, contract_id)).rowcount != 1:
+                raise ValueError("수정할 계약 기록을 찾을 수 없습니다.")
+    finally:
+        connection.close()
+
+
+def update_contract_details(contract_id: int, values: dict[str, Any], path: Path = DATABASE_PATH) -> None:
+    """계약 기록을 지우지 않고 상태·연락처·계약금·잔금만 수정한다."""
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute(
+                """
+                UPDATE contracts
+                SET contract_status = ?, contractor_contact = ?, contract_deposit_manwon = ?, balance_manwon = ?
+                WHERE id = ?
+                """,
+                (
+                    values["contract_status"], values.get("contractor_contact"),
+                    values.get("contract_deposit_manwon"), values.get("balance_manwon"), contract_id,
+                ),
+            ).rowcount != 1:
+                raise ValueError("수정할 계약 기록을 찾을 수 없습니다.")
     finally:
         connection.close()
 

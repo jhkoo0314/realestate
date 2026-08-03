@@ -11,6 +11,7 @@ from storage.database import (
     get_building_management_detail,
     get_building_password,
     get_building_units,
+    get_contracts,
     get_unit_listing_history,
     get_unit_management_detail,
     get_unit_password,
@@ -189,6 +190,18 @@ def _render_unit_detail(unit_id: int) -> None:
         st.dataframe(rows, use_container_width=True, hide_index=True)
     else:
         st.info("등록된 매물 이력이 없습니다.")
+
+    contracts = get_contracts(unit_id=unit_id)
+    st.markdown("#### 계약 이력")
+    if contracts:
+        st.dataframe([{
+            "매물 접수일": item["received_date"], "계약 유형": item["contract_type"],
+            "시작일": item["contract_start_date"], "종료일": item["contract_end_date"] or "-",
+            "기간(개월)": item["term_months"] or "-", "계약 상태": item["contract_status"],
+            "메모": item["contract_note"] or "-",
+        } for item in contracts], use_container_width=True, hide_index=True)
+    else:
+        st.info("등록된 계약 이력이 없습니다. 계약 등록과 상태 변경은 계약관리 탭에서 합니다.")
 
 
 def render_building_management() -> None:
