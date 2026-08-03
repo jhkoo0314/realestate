@@ -90,6 +90,8 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "move_out_due_date": _date_text(raw.get("move_out_due_date")),
             "photo_status": raw.get("photo_status"),
             "listing_note": _clean_text(raw.get("listing_note")),
+            "landlord_contact": _clean_text(raw.get("landlord_contact")),
+            "tenant_contact": _clean_text(raw.get("tenant_contact")),
             "next_check_date": _date_text(raw.get("next_check_date")),
         },
     }
@@ -168,6 +170,8 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
         "move_out_due_date": _date_text(raw.get("move_out_due_date")),
         "photo_status": raw.get("photo_status"),
         "listing_note": note,
+        "landlord_contact": _clean_text(raw.get("landlord_contact")),
+        "tenant_contact": _clean_text(raw.get("tenant_contact")),
         "next_check_date": _date_text(raw.get("next_check_date")),
         "verification_note": verification_note,
     }, []

@@ -38,7 +38,7 @@ INPUT_KEYS = [
     "room_type", "direction", "access_method", "unit_access_password",
     "unit_highlights", "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
-    "photo_status", "listing_note", "next_check_date",
+    "photo_status", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
 
@@ -216,6 +216,13 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     st.date_input("퇴실 예정일", value=None, key="registration_move_out_due_date")
     st.date_input("재확인 예정일", value=None, key="registration_next_check_date")
     st.text_area("이번 매물 메모", key="registration_listing_note", placeholder="예: 세입자와 방문시간 협의 필요")
+    with st.expander("임대인·세입자 연락처 (내부정보)"):
+        contact_left, contact_right = st.columns(2)
+        with contact_left:
+            st.text_input("임대인 연락처", key="registration_landlord_contact", placeholder="예: 010-1234-5678")
+        with contact_right:
+            st.text_input("세입자 연락처", key="registration_tenant_contact", placeholder="예: 010-1234-5678")
+        st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
     return duplicate_unit
 
 
@@ -289,6 +296,13 @@ def _render_current_listing_edit(unit_id: int) -> None:
         if st.session_state.get("edit_photo_status", listing["photo_status"]) == "촬영 완료":
             st.date_input("사진 촬영일", value=date.today(), key="edit_last_photo_date")
     st.text_area("이번 매물 메모", value=listing["listing_note"] or "", key="edit_listing_note")
+    with st.expander("임대인·세입자 연락처 (내부정보)"):
+        contact_left, contact_right = st.columns(2)
+        with contact_left:
+            st.text_input("임대인 연락처", value=listing["landlord_contact"] or "", key="edit_landlord_contact")
+        with contact_right:
+            st.text_input("세입자 연락처", value=listing["tenant_contact"] or "", key="edit_tenant_contact")
+        st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
     if st.button("현재 매물 수정", type="primary"):
         raw = {
@@ -303,6 +317,8 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "last_photo_date": st.session_state.get("edit_last_photo_date"),
             "next_check_date": st.session_state.get("edit_next_check_date"),
             "listing_note": st.session_state.get("edit_listing_note"),
+            "landlord_contact": st.session_state.get("edit_landlord_contact"),
+            "tenant_contact": st.session_state.get("edit_tenant_contact"),
         }
         updated, errors = validate_current_listing(raw)
         if errors:
@@ -417,6 +433,13 @@ def _render_relisting_form(unit_id: int) -> None:
     st.date_input("퇴실 예정일", value=None, key="relisting_move_out_due_date")
     st.date_input("재확인 예정일", value=None, key="relisting_next_check_date")
     st.text_area("이번 매물 메모", key="relisting_listing_note")
+    with st.expander("임대인·세입자 연락처 (내부정보)"):
+        contact_left, contact_right = st.columns(2)
+        with contact_left:
+            st.text_input("임대인 연락처", key="relisting_landlord_contact", placeholder="예: 010-1234-5678")
+        with contact_right:
+            st.text_input("세입자 연락처", key="relisting_tenant_contact", placeholder="예: 010-1234-5678")
+        st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
     if st.button("새 매물 회차로 등록", type="primary"):
         raw = {
@@ -432,6 +455,8 @@ def _render_relisting_form(unit_id: int) -> None:
             "photo_status": st.session_state.get("relisting_photo_status"),
             "next_check_date": st.session_state.get("relisting_next_check_date"),
             "listing_note": st.session_state.get("relisting_listing_note"),
+            "landlord_contact": st.session_state.get("relisting_landlord_contact"),
+            "tenant_contact": st.session_state.get("relisting_tenant_contact"),
         }
         listing, errors = validate_relisting(raw)
         if errors:

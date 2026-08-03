@@ -7,7 +7,13 @@ from datetime import date
 import streamlit as st
 
 from services.listing_service import LISTING_STATUSES, ROOM_TYPES
-from storage.database import DATABASE_PATH, get_current_listings, update_listing_quick_fields
+from services.export_service import create_current_listing_excel, make_export_filename
+from storage.database import (
+    DATABASE_PATH,
+    get_current_listing_export_rows,
+    get_current_listings,
+    update_listing_quick_fields,
+)
 
 
 PHOTO_STATUSES = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
@@ -86,9 +92,55 @@ def _render_quick_edit(selected: dict) -> None:
         st.rerun()
 
 
+def _render_excel_export(
+    all_listings: list[dict],
+    query_listings: list[dict],
+    received_start: date | None,
+    received_end: date | None,
+) -> None:
+    """전체 또는 현재 조회 결과를 사용자가 확인한 뒤 내려받게 한다."""
+    st.markdown("#### 엑셀 내보내기")
+    scope = st.radio(
+        "내보낼 범위",
+        ["현재 조회 결과", "현재 매물 전체"],
+        horizontal=True,
+        key="dashboard_export_scope",
+    )
+    selected = query_listings if scope == "현재 조회 결과" else all_listings
+    if scope == "현재 조회 결과":
+        start_label = received_start.isoformat() if received_start else "처음"
+        end_label = received_end.isoformat() if received_end else "전체"
+        period_note = f"접수일: {start_label} ~ {end_label}"
+    else:
+        period_note = "접수일: 전체"
+    st.caption(f"{scope} · {period_note} · 총 {len(selected)}건")
+    st.warning("내부 업무용 파일입니다. 임대인·세입자 개인 연락처와 상담관리 고객 이름·연락처는 포함하지 않습니다.")
+    if not selected:
+        st.info("내보낼 현재 매물이 없습니다.")
+        return
+    try:
+        rows = get_current_listing_export_rows([item["listing_id"] for item in selected])
+        file_data = create_current_listing_excel(rows)
+    except Exception as error:
+        st.error(f"엑셀 파일을 만들지 못했습니다. ({error})")
+        return
+    filename = make_export_filename(
+        _date_text(received_start) if scope == "현재 조회 결과" else None,
+        _date_text(received_end) if scope == "현재 조회 결과" else None,
+    )
+    st.download_button(
+        "엑셀 파일 내려받기",
+        data=file_data,
+        file_name=filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary",
+        key="dashboard_excel_download",
+    )
+
+
 def render_dashboard(go_to_listing) -> None:
-    st.subheader("오늘의 매물 현황")
-    st.markdown("<p class='section-note'>오늘 확인하거나 처리할 현재 매물을 찾는 화면입니다.</p>", unsafe_allow_html=True)
+    st.subheader("매물 현황 리스트")
+    st.markdown("<p class='section-note'>현재 매물을 조회·필터하고, 확인이 필요한 매물을 찾거나 엑셀로 내보내는 화면입니다.</p>", unsafe_allow_html=True)
     try:
         all_listings = get_current_listings()
     except FileNotFoundError as error:
@@ -158,8 +210,10 @@ def render_dashboard(go_to_listing) -> None:
     st.markdown(f"#### 현재 조회 결과 · {len(listings)}건")
     if not listings:
         st.info("조건에 맞는 현재 매물이 없습니다. 검색어나 필터를 조정해 주세요.")
+        _render_excel_export(all_listings, listings, received_start, received_end)
         return
     st.dataframe(_display_rows(listings), use_container_width=True, hide_index=True)
+    _render_excel_export(all_listings, listings, received_start, received_end)
 
     labels = [f"{item['building_name']} · {item['unit_number']}호 · {item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}" for item in listings]
     selected_label = st.selectbox("상세·빠른 수정할 매물", labels)
