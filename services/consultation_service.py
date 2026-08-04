@@ -24,28 +24,26 @@ def _date_text(value: Any) -> str | None:
 
 def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     errors: list[str] = []
-    name, phone, note = _text(raw.get("customer_name")), _text(raw.get("customer_phone")), _text(raw.get("consultation_note"))
-    consulted_date, next_contact = _date_text(raw.get("consulted_date")), _date_text(raw.get("next_contact_date"))
+    name = _text(raw.get("customer_name")) or "미입력"
+    phone = _text(raw.get("customer_phone")) or "미입력"
+    note = _text(raw.get("consultation_note")) or "미입력"
+    consulted_date, next_contact = _date_text(raw.get("consulted_date")) or date.today().isoformat(), _date_text(raw.get("next_contact_date"))
     category = raw.get("consultation_category", "매물 상담")
     deposit, monthly_rent = raw.get("desired_deposit_manwon"), raw.get("desired_monthly_rent_manwon")
-    if not name: errors.append("고객 이름을 입력해 주세요.")
-    if not phone: errors.append("고객 연락처를 입력해 주세요.")
-    if not consulted_date: errors.append("상담일을 입력해 주세요.")
-    if raw.get("consultation_type") not in CONSULTATION_TYPES: errors.append("상담 종류를 선택해 주세요.")
-    if not note: errors.append("상담 내용을 입력해 주세요.")
-    if raw.get("consultation_status") not in CONSULTATION_STATUSES: errors.append("상담 상태를 선택해 주세요.")
-    if category not in CONSULTATION_CATEGORIES: errors.append("상담 구분을 선택해 주세요.")
+    consultation_type = raw.get("consultation_type") if raw.get("consultation_type") in CONSULTATION_TYPES else "기타"
+    consultation_status = raw.get("consultation_status") if raw.get("consultation_status") in CONSULTATION_STATUSES else "확인 필요"
+    if category not in CONSULTATION_CATEGORIES: category = "매물 상담"
     if deposit is not None and deposit < 0: errors.append("희망 보증금은 0 이상의 숫자로 입력해 주세요.")
     if monthly_rent is not None and monthly_rent < 0: errors.append("희망 월세는 0 이상의 숫자로 입력해 주세요.")
     if errors:
         return None, errors
     return {
         "consultation_category": category, "customer_name": name, "customer_phone": phone, "consulted_date": consulted_date,
-        "consultation_type": raw["consultation_type"], "consultation_note": note,
+        "consultation_type": consultation_type, "consultation_note": note,
         "desired_area": _text(raw.get("desired_area")), "desired_room_type": _text(raw.get("desired_room_type")),
         "desired_deposit_manwon": int(deposit) if deposit is not None else None,
         "desired_monthly_rent_manwon": int(monthly_rent) if monthly_rent is not None else None,
-        "next_contact_date": next_contact, "consultation_status": raw["consultation_status"],
+        "next_contact_date": next_contact, "consultation_status": consultation_status,
     }, []
 
 

@@ -75,11 +75,9 @@ def _render_building_edit(building: dict) -> None:
         with st.form(f"building_edit_{building_id}"):
             left, middle, right = st.columns(3)
             with left:
-                admin_address = st.text_input("행정주소", value=building["admin_address"] or "", key=f"building_admin_{building_id}")
                 elevator = st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], index=_index(["확인 필요", "있음", "없음"], building["has_elevator"]), key=f"building_elevator_{building_id}")
                 cctv = st.selectbox("CCTV", ["확인 필요", "있음", "없음"], index=_index(["확인 필요", "있음", "없음"], building["has_cctv"]), key=f"building_cctv_{building_id}")
             with middle:
-                road_address = st.text_input("도로명주소", value=building["road_address"] or "", key=f"building_road_{building_id}")
                 parking = st.selectbox("주차", ["확인 필요", "가능", "제한적", "불가"], index=_index(["확인 필요", "가능", "제한적", "불가"], building["parking_status"]), key=f"building_parking_{building_id}")
                 pet_policy = st.selectbox("반려동물", ["확인 필요", "가능", "불가", "협의"], index=_index(["확인 필요", "가능", "불가", "협의"], building["pet_policy"]), key=f"building_pet_{building_id}")
             with right:
@@ -103,8 +101,7 @@ def _render_building_edit(building: dict) -> None:
                 st.error("새 비밀번호를 입력하거나 ‘기존 비밀번호 유지’를 선택해 주세요.")
                 return
             update_building_management_detail(building_id, {
-                "admin_address": admin_address or None, "road_address": road_address or None, "has_elevator": elevator,
-                "parking_status": parking, "has_cctv": cctv, "pet_policy": pet_policy,
+                "has_elevator": elevator, "parking_status": parking, "has_cctv": cctv, "pet_policy": pet_policy,
                 "move_in_registration_policy": move_in, "short_term_policy": short_term, "common_fee_note": common_fee or None,
                 "building_highlights": highlights or None, "info_status": info_status,
                 "next_check_date": next_check.isoformat() if next_check else None,
@@ -224,7 +221,7 @@ def render_building_management() -> None:
         _clear_selection()
         st.rerun()
     st.info(f"선택한 건물: {building['building_name']} · {building['lot_address']}")
-    st.caption(f"행정주소: {building['admin_address'] or '미입력'} · 엘리베이터: {building['has_elevator'] or '확인 필요'} · 주차: {building['parking_status'] or '확인 필요'}")
+    st.caption(f"엘리베이터: {building['has_elevator'] or '확인 필요'} · 주차: {building['parking_status'] or '확인 필요'}")
     password_key = f"show_building_password_{building['id']}"
     if st.button("공동현관 비밀번호 보기", key=f"building_password_button_{building['id']}"):
         st.session_state[password_key] = True

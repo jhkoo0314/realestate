@@ -36,7 +36,7 @@ INPUT_KEYS = [
     "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
-UNIT_OPTION_LABELS = ["냉장고", "세탁기", "에어컨", "가스렌지", "인덕션", "옷장", "신발장"]
+UNIT_OPTION_LABELS = ["냉장고", "세탁기", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_STATUSES = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]

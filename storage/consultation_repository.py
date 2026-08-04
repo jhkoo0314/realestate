@@ -13,8 +13,8 @@ def get_consultations(*, query: str = "", statuses: list[str] | None = None, due
     ensure_database_schema(path)
     conditions, parameters = ["(c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))"], []
     if keyword := query.strip():
-        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.customer_name LIKE ? OR c.desired_area LIKE ?)")
-        parameters.extend([f"%{keyword}%"] * 5)
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.desired_area LIKE ?)")
+        parameters.extend([f"%{keyword}%"] * 4)
     if statuses:
         conditions.append(f"c.consultation_status IN ({', '.join('?' for _ in statuses)})")
         parameters.extend(statuses)

@@ -21,7 +21,7 @@ def _listing_label(item: dict) -> str:
 def _rows(items: list[dict]) -> list[dict]:
     today = date.today().isoformat()
     return [{
-        "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-", "고객 이름": item["customer_name"],
+        "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-",
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"],
         "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
         "다음 연락 필요": "확인 필요" if item["next_contact_date"] and item["next_contact_date"] <= today and item["consultation_status"] != "종료" else "-",
@@ -37,13 +37,12 @@ def _render_registration() -> None:
         with st.form("general_consultation_create"):
             left, middle, right = st.columns(3)
             with left:
-                customer_name = st.text_input("고객 이름 *")
-                customer_phone = st.text_input("고객 연락처 *", placeholder="예: 010-1234-5678")
+                customer_phone = st.text_input("고객 연락처", placeholder="예: 010-1234-5678")
             with middle:
-                consulted_date = st.date_input("상담일 *", value=date.today())
-                consultation_type = st.selectbox("상담 종류 *", CONSULTATION_TYPES)
+                consulted_date = st.date_input("상담일", value=date.today())
+                consultation_type = st.selectbox("상담 종류", CONSULTATION_TYPES)
             with right:
-                consultation_status = st.selectbox("상담 상태 *", CONSULTATION_STATUSES)
+                consultation_status = st.selectbox("상담 상태", CONSULTATION_STATUSES)
                 next_contact = st.date_input("다음 연락일", value=None)
             st.markdown("##### 희망 조건 (선택)")
             desired_left, desired_middle, desired_right, desired_last = st.columns(4)
@@ -51,12 +50,11 @@ def _render_registration() -> None:
             with desired_middle: desired_room_type = st.text_input("희망 방 형태", placeholder="예: 투룸")
             with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=None)
             with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=None)
-            note = st.text_area("상담 내용 *", placeholder="예: 원하는 지역·입주 시기·특이사항")
-            confirmed = st.checkbox("일반 상담을 등록하는 것을 확인했습니다.")
-            submitted = st.form_submit_button("일반 상담 등록", type="primary", disabled=not confirmed)
+            note = st.text_area("상담 내용", placeholder="예: 원하는 지역·입주 시기·특이사항")
+            submitted = st.form_submit_button("일반 상담 등록", type="primary")
         if submitted:
             consultation, errors = validate_consultation({
-                "consultation_category": category, "customer_name": customer_name, "customer_phone": customer_phone,
+                "consultation_category": category, "customer_phone": customer_phone,
                 "consulted_date": consulted_date, "consultation_type": consultation_type, "consultation_note": note,
                 "desired_area": desired_area, "desired_room_type": desired_room_type,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
@@ -97,20 +95,18 @@ def _render_registration() -> None:
     with st.form(f"consultation_create_{selected['listing_id']}"):
         left, middle, right = st.columns(3)
         with left:
-            customer_name = st.text_input("고객 이름 *")
-            customer_phone = st.text_input("고객 연락처 *", placeholder="예: 010-1234-5678")
+            customer_phone = st.text_input("고객 연락처", placeholder="예: 010-1234-5678")
         with middle:
-            consulted_date = st.date_input("상담일 *", value=date.today())
-            consultation_type = st.selectbox("상담 종류 *", CONSULTATION_TYPES)
+            consulted_date = st.date_input("상담일", value=date.today())
+            consultation_type = st.selectbox("상담 종류", CONSULTATION_TYPES)
         with right:
-            consultation_status = st.selectbox("상담 상태 *", CONSULTATION_STATUSES)
+            consultation_status = st.selectbox("상담 상태", CONSULTATION_STATUSES)
             next_contact = st.date_input("다음 연락일", value=None)
-        note = st.text_area("상담 내용 *", placeholder="예: 방문 일정 협의, 가격 안내")
-        confirmed = st.checkbox("선택한 매물 기록에 새 상담을 추가하는 것을 확인했습니다.")
-        submitted = st.form_submit_button("새 상담 등록", type="primary", disabled=not confirmed)
+        note = st.text_area("상담 내용", placeholder="예: 방문 일정 협의, 가격 안내")
+        submitted = st.form_submit_button("새 상담 등록", type="primary")
     if submitted:
         consultation, errors = validate_consultation({
-            "consultation_category": category, "customer_name": customer_name, "customer_phone": customer_phone, "consulted_date": consulted_date,
+            "consultation_category": category, "customer_phone": customer_phone, "consulted_date": consulted_date,
             "consultation_type": consultation_type, "consultation_note": note,
             "next_contact_date": next_contact, "consultation_status": consultation_status,
         })
@@ -132,7 +128,7 @@ def _render_lookup() -> None:
     with st.form("consultation_search_form"):
         query_column, status_column = st.columns([2, 2])
         with query_column:
-            query = st.text_input("건물명·지번·호수·고객 이름·희망 지역 검색", key="consultation_query")
+            query = st.text_input("건물명·지번·호수·희망 지역 검색", key="consultation_query")
         with status_column:
             statuses = st.multiselect("상담 상태", CONSULTATION_STATUSES, key="consultation_status_filter")
         due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
@@ -147,7 +143,7 @@ def _render_lookup() -> None:
         st.info("조건에 맞는 상담 기록이 없습니다.")
         return
     st.dataframe(_rows(items), use_container_width=True, hide_index=True)
-    labels = [f"{_listing_label(item)} · {item['customer_name']} · 상담일 {item['consulted_date']}" for item in items]
+    labels = [f"{_listing_label(item)} · 상담일 {item['consulted_date']} · 상담 #{item['consultation_id']}" for item in items]
     chosen = st.selectbox("상세·수정할 상담", labels, key="consultation_target")
     detail = get_consultation_detail(items[labels.index(chosen)]["consultation_id"])
     if detail is None:
@@ -160,7 +156,6 @@ def _render_lookup() -> None:
     with st.form(f"consultation_edit_{detail['consultation_id']}"):
         left, middle, right = st.columns(3)
         with left:
-            customer_name = st.text_input("고객 이름", value=detail["customer_name"])
             customer_phone = detail["customer_phone"]
             if st.session_state.get(phone_key):
                 customer_phone = st.text_input("고객 연락처", value=detail["customer_phone"])
@@ -187,7 +182,7 @@ def _render_lookup() -> None:
     if submitted:
         try:
             save_consultation_changes(detail["consultation_id"], {
-                "consultation_category": detail["consultation_category"], "customer_name": customer_name, "customer_phone": customer_phone, "consultation_note": note,
+                "consultation_category": detail["consultation_category"], "customer_name": detail["customer_name"], "customer_phone": customer_phone, "consultation_note": note,
                 "desired_area": desired_area, "desired_room_type": desired_room_type,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
                 "next_contact_date": next_contact, "consultation_status": status,

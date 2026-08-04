@@ -13,7 +13,7 @@ def search_buildings(query: str, path: Path = DATABASE_PATH) -> list[dict[str, A
     if not keyword: return []
     connection = get_connection(path)
     try:
-        rows = connection.execute("""SELECT b.id, b.building_name, b.lot_address, b.admin_address, b.road_address, b.has_elevator, b.parking_status, COUNT(u.id) AS unit_count FROM buildings b LEFT JOIN units u ON u.building_id = b.id AND u.is_active = 1 WHERE b.is_active = 1 AND (b.building_name LIKE ? OR b.lot_address LIKE ?) GROUP BY b.id ORDER BY b.building_name, b.lot_address""", (f"%{keyword}%", f"%{keyword}%")).fetchall()
+        rows = connection.execute("""SELECT b.id, b.building_name, b.lot_address, b.has_elevator, b.parking_status, COUNT(u.id) AS unit_count FROM buildings b LEFT JOIN units u ON u.building_id = b.id AND u.is_active = 1 WHERE b.is_active = 1 AND (b.building_name LIKE ? OR b.lot_address LIKE ?) GROUP BY b.id ORDER BY b.building_name, b.lot_address""", (f"%{keyword}%", f"%{keyword}%")).fetchall()
         return [dict(row) for row in rows]
     finally: connection.close()
 
@@ -21,7 +21,7 @@ def search_buildings(query: str, path: Path = DATABASE_PATH) -> list[dict[str, A
 def get_building_management_detail(building_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
     require_database(path); connection = get_connection(path)
     try:
-        row = connection.execute("""SELECT id, building_name, lot_address, admin_address, road_address, has_elevator, parking_status, has_cctv, pet_policy, move_in_registration_policy, short_term_policy, common_fee_note, building_highlights, info_status, last_checked_date, next_check_date FROM buildings WHERE id = ? AND is_active = 1""", (building_id,)).fetchone()
+        row = connection.execute("""SELECT id, building_name, lot_address, has_elevator, parking_status, has_cctv, pet_policy, move_in_registration_policy, short_term_policy, common_fee_note, building_highlights, info_status, last_checked_date, next_check_date FROM buildings WHERE id = ? AND is_active = 1""", (building_id,)).fetchone()
         return dict(row) if row else None
     finally: connection.close()
 
@@ -39,7 +39,7 @@ def update_building_management_detail(building_id: int, values: dict[str, Any], 
     try:
         with connection:
             if connection.execute("SELECT 1 FROM buildings WHERE id = ? AND is_active = 1", (building_id,)).fetchone() is None: raise ValueError("수정할 건물을 찾을 수 없습니다.")
-            connection.execute("""UPDATE buildings SET admin_address=COALESCE(?,admin_address), road_address=COALESCE(?,road_address), has_elevator=COALESCE(?,has_elevator), parking_status=COALESCE(?,parking_status), has_cctv=COALESCE(?,has_cctv), pet_policy=COALESCE(?,pet_policy), move_in_registration_policy=COALESCE(?,move_in_registration_policy), short_term_policy=COALESCE(?,short_term_policy), common_fee_note=COALESCE(?,common_fee_note), building_highlights=COALESCE(?,building_highlights), info_status=COALESCE(?,info_status), next_check_date=COALESCE(?,next_check_date), common_entrance_password=CASE WHEN ? THEN NULL ELSE COALESCE(?,common_entrance_password) END WHERE id=?""", (values.get("admin_address"),values.get("road_address"),values.get("has_elevator"),values.get("parking_status"),values.get("has_cctv"),values.get("pet_policy"),values.get("move_in_registration_policy"),values.get("short_term_policy"),values.get("common_fee_note"),values.get("building_highlights"),values.get("info_status"),values.get("next_check_date"),values.get("clear_common_entrance_password",False),values.get("common_entrance_password"),building_id))
+            connection.execute("""UPDATE buildings SET has_elevator=COALESCE(?,has_elevator), parking_status=COALESCE(?,parking_status), has_cctv=COALESCE(?,has_cctv), pet_policy=COALESCE(?,pet_policy), move_in_registration_policy=COALESCE(?,move_in_registration_policy), short_term_policy=COALESCE(?,short_term_policy), common_fee_note=COALESCE(?,common_fee_note), building_highlights=COALESCE(?,building_highlights), info_status=COALESCE(?,info_status), next_check_date=COALESCE(?,next_check_date), common_entrance_password=CASE WHEN ? THEN NULL ELSE COALESCE(?,common_entrance_password) END WHERE id=?""", (values.get("has_elevator"),values.get("parking_status"),values.get("has_cctv"),values.get("pet_policy"),values.get("move_in_registration_policy"),values.get("short_term_policy"),values.get("common_fee_note"),values.get("building_highlights"),values.get("info_status"),values.get("next_check_date"),values.get("clear_common_entrance_password",False),values.get("common_entrance_password"),building_id))
     finally: connection.close()
 
 
