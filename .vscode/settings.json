@@ -1,0 +1,11 @@
+{
+  "terminal.integrated.profiles.windows": {
+    "PowerShell 7.6.3": {
+      "path": "${env:LOCALAPPDATA}\\Microsoft\\WindowsApps\\pwsh.exe",
+      "args": [
+        "-NoLogo"
+      ]
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell 7.6.3"
+}
