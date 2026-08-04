@@ -6,7 +6,7 @@
 
 ## 현재 구현된 기능
 
-현재 **13단계: 데이터 저장 코드 기능별 분리**까지 코드 구현과 기본 자동 확인을 마쳤습니다. 실제 브라우저에서 사람이 직접 눌러 보는 확인과 10단계 백업·복구·사무실 운영 준비는 남아 있습니다.
+현재 **13단계: 데이터 저장 코드 기능별 분리**까지 코드 구현과 기본 자동 확인을 마쳤습니다. 프로젝트는 메인 PC의 `C:\realestate-main`으로 이전되었고 Python 3.12 가상환경을 준비했습니다. 실제 브라우저 확인, Tailscale Serve 연결 확인, 백업·복구 확인은 남아 있습니다.
 
 - 매물 현황 리스트, 매물 등록·수정, 건물·호실 관리, 계약관리, 상담관리의 5개 메뉴
 - 새 건물·새 호실·첫 매물을 한 번에 등록
@@ -27,28 +27,35 @@
 
 매물 현황 리스트에서 조회한 결과 또는 전체 현재 매물을 엑셀로 내보낼 수 있습니다. 공동현관·방문 비밀번호와 내부 메모는 내부 업무용 엑셀에 포함하며, 개인 연락처는 포함하지 않습니다.
 
-아직 남은 운영 준비는 백업·복구 확인과 메인 PC 한 대에서 두 사용자 PC가 같은 데이터를 보도록 연결하는 작업입니다. 사용자 PC에는 데이터 파일을 복사하지 않고, 메인 PC의 데이터 파일 한 곳만 사용합니다.
+아직 남은 운영 준비는 백업·복구 확인과 메인 PC 한 대에서 두 사용자 PC가 같은 데이터를 보도록 Tailscale Serve 연결을 확인하는 작업입니다. 사용자 PC에는 데이터 파일을 복사하지 않고, 메인 PC의 데이터 파일 한 곳만 사용합니다.
 
 자세한 단계별 진행 상황은 [현재 구현 진행 상황](docs/current_implementation_status.md)에서 확인할 수 있습니다.
 
 ## 실행 방법
 
-### 1. 준비
+### 1. 처음 한 번만: Python 3.12 가상환경 준비
 
-Python이 설치된 Windows PC에서 프로젝트 폴더를 엽니다.
-
-필요한 프로그램 구성요소를 설치합니다.
+메인 PC에서 PowerShell을 열고 프로젝트 폴더로 이동합니다.
 
 ```powershell
-python -m pip install -r requirements.txt
+cd C:\realestate-main
 ```
+
+Python 3.12로 가상환경을 만들고 필요한 패키지를 설치합니다.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`streamlit`만 입력하면 Windows가 명령을 찾지 못할 수 있으므로, 아래 실행 방법처럼 항상 `.venv`의 Python을 사용합니다.
 
 ### 2. 프로그램 실행
 
 프로젝트 폴더에서 아래 명령을 실행합니다.
 
 ```powershell
-streamlit run app.py
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
 실행 후 브라우저에서 아래 주소를 엽니다.
@@ -59,12 +66,27 @@ http://127.0.0.1:8501
 
 프로그램을 멈추려면 명령 창에서 `Ctrl + C`를 누릅니다.
 
+### 3. 허가된 사용자 PC 연결: Tailscale Serve
+
+메인 PC와 사용자 PC에 Tailscale을 설치하고, 각 직원은 자신의 계정으로 로그인합니다. Tailscale 관리자는 허가된 사용자·기기만 승인합니다.
+
+먼저 메인 PC에서 위의 프로그램 실행 명령으로 `http://127.0.0.1:8501`이 열리는지 확인합니다. 그 상태에서 별도 PowerShell 창에 아래 명령을 실행합니다.
+
+```powershell
+tailscale serve --bg http://127.0.0.1:8501
+tailscale serve status
+```
+
+`tailscale serve status`가 알려 주는 `https://...` 주소를 허가된 사용자 PC의 브라우저에서 엽니다. Streamlit은 메인 PC의 `127.0.0.1`에만 열려 있으므로, 사용자 PC에는 SQLite 파일이나 프로그램을 설치하지 않습니다.
+
+Tailscale Funnel, 공유기 포트 포워딩, `0.0.0.0` 공개 바인딩은 사용하지 않습니다. 상세한 작업 순서와 접근정책 예시는 [메인 PC Tailscale 연결 실행 계획서](docs/tailscale_main_pc_connection_plan.md)를 확인합니다.
+
 ## 데이터가 저장되는 곳
 
 등록한 데이터는 아래 파일에 저장됩니다.
 
 ```text
-storage/real_estate.db
+C:\realestate-main\storage\real_estate.db
 ```
 
 이 파일에는 매물 정보와 내부정보가 포함될 수 있으므로, 임의로 삭제·이동·공유하면 안 됩니다.
@@ -72,8 +94,10 @@ storage/real_estate.db
 ## 중요한 사용 주의사항
 
 - 이 도구는 사무실 내부에서만 사용합니다. 인터넷에 공개하지 않습니다.
-- 두 PC 운영 시에는 메인 PC에서 프로그램과 데이터 파일을 실행하고, 허용된 두 사용자만 Tailscale 내부 연결로 접속합니다.
+- 두 PC 운영 시에는 메인 PC에서 프로그램과 데이터 파일을 실행하고, 허용된 두 사용자만 Tailscale Serve 전용 HTTPS 주소로 접속합니다.
+- `tailscale funnel`, 공유기 포트 포워딩, `0.0.0.0` 공개 바인딩은 사용하지 않습니다.
 - 공동현관 비밀번호, 방문 비밀번호, 내부 메모는 외부에 공유하지 않습니다.
+- 내부 업무용 엑셀에는 비밀번호·내부 메모가 포함될 수 있으므로 외부에 공유하지 않습니다. 개인 연락처와 상담 고객 이름·연락처는 엑셀에 포함하지 않습니다.
 - 현재 데이터 파일을 Google Drive, OneDrive 같은 동기화 폴더에서 직접 실행하지 않습니다.
 - 프로그램을 업데이트하기 전에는 데이터 파일을 별도로 복사해 백업합니다.
 - 매물 현황 리스트는 조회·필터·내보내기용이며, 새 등록·수정·종료·재등록은 `매물 등록·수정` 메뉴에서 처리합니다.
@@ -83,6 +107,7 @@ storage/real_estate.db
 ```text
 realestate/
 ├─ app.py                         프로그램 실행 파일
+├─ .venv/                          메인 PC의 Python 3.12 가상환경
 ├─ ui/                            사용자가 보는 화면
 ├─ services/                      입력값 확인과 저장 규칙
 ├─ storage/                       공통 연결·업무별 저장 기능과 실제 데이터 파일
@@ -95,5 +120,6 @@ realestate/
 - [현재 구현 진행 상황](docs/current_implementation_status.md)
 - [개발·운영 규칙](AGENT.md)
 - [Tailscale 원격 접속 안내](docs/tailscale_remote_access_guide.md)
+- [메인 PC Tailscale 연결 실행 계획서](docs/tailscale_main_pc_connection_plan.md)
 - [데이터 항목 정의](docs/real_estate_data_dictionary_v1.md)
 - [업무 흐름](docs/real_estate_listing_workflow_spec_v1.md)
