@@ -16,6 +16,7 @@ from services.listing_service import (
     save_confirmed_relisting,
     save_current_listing_changes,
     close_listing,
+    delete_listing,
     validate_new_building_listing,
     validate_relisting,
     validate_current_listing,
@@ -26,7 +27,7 @@ from storage.listing_write_repository import deactivate_unit, get_current_listin
 
 
 INPUT_KEYS = [
-    "building_name", "lot_address", "admin_address", "road_address", "common_entrance_password",
+    "building_name", "lot_address", "common_entrance_password",
     "has_elevator", "parking_status", "building_internal_note", "unit_number", "floor_number",
     "room_type", "direction", "access_method", "unit_access_password",
     "unit_highlights", "listing_status", "deposit_manwon", "monthly_rent_manwon",
@@ -132,10 +133,8 @@ def _render_new_building_fields() -> None:
     with st.expander("건물 상세정보"):
         detail_left, detail_right = st.columns(2)
         with detail_left:
-            st.text_input("행정주소", key="registration_admin_address")
             st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], key="registration_has_elevator")
         with detail_right:
-            st.text_input("도로명주소", key="registration_road_address")
             st.selectbox("주차", ["확인 필요", "가능", "제한적", "불가"], key="registration_parking_status")
         st.text_area("건물 내부 메모 (외부 공유 금지)", key="registration_building_internal_note")
 
@@ -328,7 +327,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
 
     with st.expander("이 매물 종료 처리"):
         st.warning("종료해도 기록은 삭제되지 않고 과거 이력에 남습니다.")
-        close_reason = st.selectbox("종료 사유", ["계약 완료", "임대인 보류", "광고 중단", "정보 오류", "기타"], key="close_reason")
+        close_reason = st.selectbox("종료 사유", ["계약 완료", "타 부동산 계약", "임대인 보류", "광고 중단", "정보 오류", "기타"], key="close_reason")
         close_date = st.date_input("종료일", value=date.today(), key="close_date")
         if st.button("종료 처리", type="secondary"):
             try:
@@ -338,6 +337,20 @@ def _render_current_listing_edit(unit_id: int) -> None:
                 return
             st.session_state.pop("editing_listing_unit_id", None)
             st.success("매물을 종료 처리했습니다. 기록은 과거 이력에 남아 있습니다.")
+            st.rerun()
+
+    with st.expander("이 매물 완전 삭제"):
+        st.error("이 매물은 복구할 수 없게 삭제됩니다. 연결된 계약·상담 기록도 함께 삭제됩니다.")
+        confirmed = st.checkbox("이 매물과 연결 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"delete_listing_confirm_{listing['id']}")
+        if st.button("매물 완전 삭제", type="secondary", disabled=not confirmed, key=f"delete_listing_{listing['id']}"):
+            try:
+                deleted = delete_listing(listing["id"])
+            except Exception as error:
+                st.error(f"매물을 삭제하지 못했습니다. ({error})")
+                return
+            st.session_state.pop("editing_listing_unit_id", None)
+            st.session_state.pop("selected_registration_unit_id", None)
+            st.success(f"매물을 삭제했습니다. 연결된 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건도 함께 삭제했습니다.")
             st.rerun()
 
 

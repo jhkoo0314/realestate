@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.contract_repository import create_contract, update_contract_details, update_contract_status
+from storage.contract_repository import create_contract, delete_contract as delete_contract_record, update_contract_details, update_contract_status
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
@@ -80,3 +80,8 @@ def change_contract_details(contract_id: int, values: dict[str, Any]) -> None:
     if errors:
         raise ValueError(" ".join(errors))
     update_contract_details(contract_id, contract)
+
+
+def delete_contract(contract_id: int) -> None:
+    """선택한 계약 기록을 완전히 삭제한다."""
+    delete_contract_record(contract_id)

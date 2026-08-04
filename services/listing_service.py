@@ -10,7 +10,7 @@ from storage.listing_create_repository import (
     save_first_listing,
     save_first_listing_for_existing_building,
 )
-from storage.listing_write_repository import close_current_listing, save_new_listing_round, update_current_listing
+from storage.listing_write_repository import close_current_listing, delete_listing as delete_listing_record, save_new_listing_round, update_current_listing
 
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
@@ -198,6 +198,11 @@ def save_current_listing_changes(listing_id: int, listing: dict[str, Any]) -> No
 def close_listing(listing_id: int, close_date: date, close_reason: str) -> None:
     """현재 매물을 종료 처리하고 기록은 남긴다."""
     close_current_listing(listing_id, close_date.isoformat(), close_reason)
+
+
+def delete_listing(listing_id: int) -> dict[str, int]:
+    """매물과 그 매물에 연결된 계약·상담 기록을 완전히 삭제한다."""
+    return delete_listing_record(listing_id)
 
 
 def listing_summary(payload: dict[str, dict[str, Any]]) -> str:

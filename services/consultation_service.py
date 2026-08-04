@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.consultation_repository import create_consultation, update_consultation
+from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, update_consultation
 
 
 CONSULTATION_TYPES = ["전화", "문자", "방문", "기타"]
@@ -49,3 +49,8 @@ def save_consultation_changes(consultation_id: int, values: dict[str, Any]) -> N
     if errors:
         raise ValueError(" ".join(errors))
     update_consultation(consultation_id, consultation)
+
+
+def delete_consultation(consultation_id: int) -> None:
+    """선택한 상담 기록을 완전히 삭제한다."""
+    delete_consultation_record(consultation_id)

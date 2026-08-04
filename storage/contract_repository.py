@@ -63,3 +63,13 @@ def update_contract_details(contract_id: int, values: dict[str, Any], path: Path
             if current is None: raise ValueError("수정할 계약 기록을 찾을 수 없습니다.")
             connection.execute("UPDATE contracts SET contract_status = ?, contractor_contact = ?, contract_deposit_manwon = ?, balance_manwon = ? WHERE id = ?", (values.get("contract_status", current["contract_status"]), values.get("contractor_contact", current["contractor_contact"]), values.get("contract_deposit_manwon", current["contract_deposit_manwon"]), values.get("balance_manwon", current["balance_manwon"]), contract_id))
     finally: connection.close()
+
+
+def delete_contract(contract_id: int, path: Path = DATABASE_PATH) -> None:
+    """선택한 계약 기록 1건만 완전히 삭제한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("DELETE FROM contracts WHERE id = ?", (contract_id,)).rowcount != 1:
+                raise ValueError("삭제할 계약 기록을 찾을 수 없습니다.")
+    finally: connection.close()

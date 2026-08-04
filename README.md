@@ -94,5 +94,6 @@ realestate/
 - [작업 계획](docs/TASK.md)
 - [현재 구현 진행 상황](docs/current_implementation_status.md)
 - [개발·운영 규칙](AGENT.md)
+- [Tailscale 원격 접속 안내](docs/tailscale_remote_access_guide.md)
 - [데이터 항목 정의](docs/real_estate_data_dictionary_v1.md)
 - [업무 흐름](docs/real_estate_listing_workflow_spec_v1.md)

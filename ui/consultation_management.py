@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.consultation_service import CONSULTATION_STATUSES, CONSULTATION_TYPES, save_consultation, save_consultation_changes, validate_consultation
+from services.consultation_service import CONSULTATION_STATUSES, CONSULTATION_TYPES, delete_consultation, save_consultation, save_consultation_changes, validate_consultation
 from storage.consultation_repository import get_consultation_detail, get_consultations
 from storage.listing_repository import search_listing_rounds
 
@@ -137,6 +137,18 @@ def _render_lookup() -> None:
             st.error(str(error))
         else:
             st.success("상담 기록은 유지한 채 정보를 수정했습니다.")
+            st.rerun()
+
+    with st.expander("이 상담 기록 완전 삭제"):
+        st.error("선택한 상담 기록만 삭제됩니다. 매물과 계약 기록은 남습니다.")
+        confirmed = st.checkbox("이 상담 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"delete_consultation_confirm_{detail['consultation_id']}")
+        if st.button("상담 기록 삭제", type="secondary", disabled=not confirmed, key=f"delete_consultation_{detail['consultation_id']}"):
+            try:
+                delete_consultation(detail["consultation_id"])
+            except ValueError as error:
+                st.error(str(error))
+                return
+            st.success("상담 기록을 삭제했습니다.")
             st.rerun()
 
 

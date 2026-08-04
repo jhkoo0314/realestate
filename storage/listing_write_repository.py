@@ -49,6 +49,22 @@ def close_current_listing(listing_id: int, close_date: str, close_reason: str, p
     finally: connection.close()
 
 
+def delete_listing(listing_id: int, path: Path = DATABASE_PATH) -> dict[str, int]:
+    """매물 1건과 연결된 계약·상담 기록을 함께 완전히 삭제한다."""
+    require_database(path); connection=get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM listings WHERE id=?", (listing_id,)).fetchone() is None:
+                raise ValueError("삭제할 매물을 찾을 수 없습니다.")
+            consultation_count = connection.execute("SELECT COUNT(*) FROM consultations WHERE listing_id=?", (listing_id,)).fetchone()[0]
+            contract_count = connection.execute("SELECT COUNT(*) FROM contracts WHERE listing_id=?", (listing_id,)).fetchone()[0]
+            connection.execute("DELETE FROM consultations WHERE listing_id=?", (listing_id,))
+            connection.execute("DELETE FROM contracts WHERE listing_id=?", (listing_id,))
+            connection.execute("DELETE FROM listings WHERE id=?", (listing_id,))
+            return {"contracts": contract_count, "consultations": consultation_count}
+    finally: connection.close()
+
+
 def save_new_listing_round(unit_id: int, listing: dict[str, Any], path: Path = DATABASE_PATH) -> int:
     require_database(path); connection=get_connection(path)
     try:

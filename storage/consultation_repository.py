@@ -60,3 +60,13 @@ def update_consultation(consultation_id: int, values: dict[str, Any], path: Path
         with connection:
             if connection.execute("UPDATE consultations SET customer_name = ?, customer_phone = ?, consultation_note = ?, next_contact_date = ?, consultation_status = ? WHERE id = ?", (values["customer_name"], values["customer_phone"], values["consultation_note"], values.get("next_contact_date"), values["consultation_status"], consultation_id)).rowcount != 1: raise ValueError("수정할 상담 기록을 찾을 수 없습니다.")
     finally: connection.close()
+
+
+def delete_consultation(consultation_id: int, path: Path = DATABASE_PATH) -> None:
+    """선택한 상담 기록 1건만 완전히 삭제한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("DELETE FROM consultations WHERE id = ?", (consultation_id,)).rowcount != 1:
+                raise ValueError("삭제할 상담 기록을 찾을 수 없습니다.")
+    finally: connection.close()

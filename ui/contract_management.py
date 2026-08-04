@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, save_contract, validate_contract
+from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
 from storage.contract_repository import get_contracts
 from storage.listing_repository import search_listing_rounds
 
@@ -65,6 +65,18 @@ def _render_status_change(contracts: list[dict]) -> None:
             st.error(str(error))
         else:
             st.success("계약 기록은 유지한 채 계약 정보를 수정했습니다.")
+            st.rerun()
+
+    with st.expander("이 계약 기록 완전 삭제"):
+        st.error("선택한 계약 기록만 삭제됩니다. 매물과 상담 기록은 남습니다.")
+        confirmed = st.checkbox("이 계약 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"delete_contract_confirm_{selected['contract_id']}")
+        if st.button("계약 기록 삭제", type="secondary", disabled=not confirmed, key=f"delete_contract_{selected['contract_id']}"):
+            try:
+                delete_contract(selected["contract_id"])
+            except ValueError as error:
+                st.error(str(error))
+                return
+            st.success("계약 기록을 삭제했습니다.")
             st.rerun()
 
 

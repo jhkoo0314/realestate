@@ -34,8 +34,12 @@ def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[s
         connection.close()
 
 
-def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_statuses: list[str] | None = None, photo_availability: list[str] | None = None, task_filter: str | None = None, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
-    ensure_database_schema(path); conditions, parameters = ["l.closed_date IS NULL", "l.listing_status NOT IN ('계약 완료', '종료')", "u.is_active = 1", "b.is_active = 1"], []
+def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_statuses: list[str] | None = None, photo_availability: list[str] | None = None, task_filter: str | None = None, listing_scope: str = "현재 매물만", path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    ensure_database_schema(path); conditions, parameters = ["u.is_active = 1", "b.is_active = 1"], []
+    if listing_scope == "현재 매물만":
+        conditions.extend(["l.closed_date IS NULL", "l.listing_status NOT IN ('계약 완료', '종료')"])
+    elif listing_scope == "종료된 매물만":
+        conditions.append("(l.closed_date IS NOT NULL OR l.listing_status IN ('계약 완료', '종료'))")
     if keyword := query.strip():
         conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)"); parameters.extend([f"%{keyword}%"] * 4)
     if received_start: conditions.append("l.received_date >= ?"); parameters.append(received_start)
@@ -44,7 +48,7 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
         if values: conditions.append(f"{column} IN ({', '.join('?' for _ in values)})"); parameters.extend(values)
     connection = get_connection(path)
     try:
-        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,l.received_date,l.listing_status,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.available_from_date,l.photo_status,l.has_listing_photos,l.cleaning_status,l.wallpaper_status,l.repair_status,l.next_check_date,l.listing_note,l.updated_at FROM listings l JOIN units u ON u.id=l.unit_id JOIN buildings b ON b.id=u.building_id WHERE {' AND '.join(conditions)} ORDER BY l.received_date DESC,l.updated_at DESC,l.id DESC""", parameters).fetchall()
+        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,l.received_date,l.listing_status,l.closed_date,l.close_reason,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.available_from_date,l.photo_status,l.has_listing_photos,l.cleaning_status,l.wallpaper_status,l.repair_status,l.next_check_date,l.listing_note,l.updated_at FROM listings l JOIN units u ON u.id=l.unit_id JOIN buildings b ON b.id=u.building_id WHERE {' AND '.join(conditions)} ORDER BY CASE WHEN l.closed_date IS NULL THEN 1 ELSE 0 END, l.closed_date DESC, l.received_date DESC,l.updated_at DESC,l.id DESC""", parameters).fetchall()
         listings=[dict(row) for row in rows]
     finally: connection.close()
     today=date.today().isoformat()

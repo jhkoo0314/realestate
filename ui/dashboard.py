@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.listing_service import LISTING_STATUSES, ROOM_TYPES
+from services.listing_service import LISTING_STATUSES, ROOM_TYPES, delete_listing
 from services.export_service import create_current_listing_excel, make_export_filename
 from storage.export_repository import get_current_listing_export_rows
 from storage.listing_repository import get_current_listings, update_listing_quick_fields
@@ -23,7 +23,7 @@ TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "현장 상태 확�
 def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
-        "dashboard_room_types", "dashboard_photo_statuses", "dashboard_photo_availability", "dashboard_task",
+        "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_statuses", "dashboard_photo_availability", "dashboard_task",
     ):
         st.session_state.pop(key, None)
     st.session_state["dashboard_has_searched"] = False
@@ -56,7 +56,8 @@ def _display_rows(listings: list[dict]) -> list[dict]:
             "월세": item["monthly_rent_manwon"] or "확인 필요", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 상태": item["photo_status"] or "확인 필요",
             "사진 보유": item["has_listing_photos"], "해야 할 일": ", ".join(item["tasks"]) or "-",
-            "재확인일": item["next_check_date"] or "-", "메모": item["listing_note"] or "-",
+            "재확인일": item["next_check_date"] or "-", "종료일": item["closed_date"] or "-",
+            "종료 사유": item["close_reason"] or "-", "메모": item["listing_note"] or "-",
         })
     return rows
 
@@ -89,6 +90,27 @@ def _render_quick_edit(selected: dict) -> None:
             return
         st.success("빠른 수정 내용을 저장했습니다.")
         st.rerun()
+
+    with st.expander("이 매물 완전 삭제"):
+        st.error("이 매물은 복구할 수 없게 삭제됩니다. 연결된 계약·상담 기록도 함께 삭제됩니다.")
+        confirmed = st.checkbox("이 매물과 연결 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"dashboard_delete_listing_confirm_{selected['listing_id']}")
+        if st.button("매물 완전 삭제", type="secondary", disabled=not confirmed, key=f"dashboard_delete_listing_{selected['listing_id']}"):
+            try:
+                deleted = delete_listing(selected["listing_id"])
+            except Exception as error:
+                st.error(f"매물을 삭제하지 못했습니다. ({error})")
+                return
+            st.success(f"매물을 삭제했습니다. 연결된 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건도 함께 삭제했습니다.")
+            st.rerun()
+
+
+def _render_closed_listing_detail(selected: dict) -> None:
+    st.markdown("#### 선택한 종료 매물")
+    st.info("종료된 매물은 매물 현황 리스트에서 조회만 할 수 있습니다. 종료 처리는 매물 등록·수정 탭에서 합니다.")
+    st.caption(
+        f"{selected['building_name']} · {selected['lot_address']} · {selected['unit_number']}호 · "
+        f"접수일 {selected['received_date']} · 종료일 {selected['closed_date'] or '-'} · 종료 사유 {selected['close_reason'] or '-'}"
+    )
 
 
 def _render_excel_export(
@@ -153,11 +175,10 @@ def render_dashboard(go_to_listing) -> None:
 
     st.caption(f"데이터 파일: {DATABASE_PATH} · 현재 매물 {len(all_listings)}건")
     if not all_listings:
-        st.markdown("<div class='empty-panel'><h2>아직 등록된 현재 매물이 없습니다</h2><p>현재 운영할 첫 매물부터 등록해 주세요.</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='empty-panel'><h2>현재 운영 중인 매물이 없습니다</h2><p>새 매물을 등록하거나, 아래 필터에서 종료된 매물을 조회해 주세요.</p></div>", unsafe_allow_html=True)
         _, button_column, _ = st.columns([3, 2, 3])
         with button_column:
             st.button("현재 운영할 첫 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
-        return
 
     st.markdown("#### 검색·필터")
     with st.form("dashboard_search_form"):
@@ -170,15 +191,16 @@ def render_dashboard(go_to_listing) -> None:
             received_end = st.date_input("접수일 종료", value=None, key="dashboard_received_end")
         filter_columns = st.columns(5)
         with filter_columns[0]:
-            statuses = st.multiselect("매물 상태", LISTING_STATUSES, key="dashboard_statuses")
+            listing_scope = st.selectbox("표시할 매물", ["현재 매물만", "종료된 매물만", "전체"], key="dashboard_listing_scope")
         with filter_columns[1]:
-            room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
+            statuses = st.multiselect("매물 상태", LISTING_STATUSES, key="dashboard_statuses")
         with filter_columns[2]:
-            photo_statuses = st.multiselect("사진 상태", PHOTO_STATUSES, key="dashboard_photo_statuses")
+            room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
         with filter_columns[3]:
-            photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
+            photo_statuses = st.multiselect("사진 상태", PHOTO_STATUSES, key="dashboard_photo_statuses")
         with filter_columns[4]:
-            task_filter = st.selectbox("확인 업무", ["전체"] + TASK_FILTERS, key="dashboard_task")
+            photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
+        task_filter = st.selectbox("확인 업무", ["전체"] + TASK_FILTERS, key="dashboard_task")
         searched = st.form_submit_button("조회", type="primary")
     if st.button("조회·필터 초기화", on_click=_clear_filters):
         st.rerun()
@@ -205,16 +227,22 @@ def render_dashboard(go_to_listing) -> None:
         photo_statuses=photo_statuses,
         photo_availability=photo_availability,
         task_filter=None if task_filter == "전체" else task_filter,
+        listing_scope=listing_scope,
     )
-    st.markdown(f"#### 현재 조회 결과 · {len(listings)}건")
+    st.markdown(f"#### {listing_scope} 조회 결과 · {len(listings)}건")
     if not listings:
-        st.info("조건에 맞는 현재 매물이 없습니다. 검색어나 필터를 조정해 주세요.")
-        _render_excel_export(all_listings, listings, received_start, received_end)
+        st.info("조건에 맞는 매물이 없습니다. 검색어나 필터를 조정해 주세요.")
+        if listing_scope == "현재 매물만":
+            _render_excel_export(all_listings, listings, received_start, received_end)
         return
     st.dataframe(_display_rows(listings), use_container_width=True, hide_index=True)
-    _render_excel_export(all_listings, listings, received_start, received_end)
+    if listing_scope == "현재 매물만":
+        _render_excel_export(all_listings, listings, received_start, received_end)
 
-    labels = [f"{item['building_name']} · {item['unit_number']}호 · {item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}" for item in listings]
-    selected_label = st.selectbox("상세·빠른 수정할 매물", labels)
+    labels = [f"{item['building_name']} · {item['unit_number']}호 · {item['listing_status']} · {item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}" for item in listings]
+    selected_label = st.selectbox("상세 확인 또는 빠른 수정할 매물", labels)
     selected = listings[labels.index(selected_label)]
-    _render_quick_edit(selected)
+    if selected["closed_date"] or selected["listing_status"] in ("계약 완료", "종료"):
+        _render_closed_listing_detail(selected)
+    else:
+        _render_quick_edit(selected)
