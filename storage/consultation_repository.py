@@ -11,10 +11,10 @@ from storage.database import DATABASE_PATH, ensure_database_schema, get_connecti
 
 def get_consultations(*, query: str = "", statuses: list[str] | None = None, due_only: bool = False, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     ensure_database_schema(path)
-    conditions, parameters = ["b.is_active = 1", "u.is_active = 1"], []
+    conditions, parameters = ["(c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))"], []
     if keyword := query.strip():
-        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.customer_name LIKE ?)")
-        parameters.extend([f"%{keyword}%"] * 4)
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.customer_name LIKE ? OR c.desired_area LIKE ?)")
+        parameters.extend([f"%{keyword}%"] * 5)
     if statuses:
         conditions.append(f"c.consultation_status IN ({', '.join('?' for _ in statuses)})")
         parameters.extend(statuses)
@@ -24,8 +24,8 @@ def get_consultations(*, query: str = "", statuses: list[str] | None = None, due
     connection = get_connection(path)
     try:
         rows = connection.execute(f"""
-            SELECT c.id AS consultation_id, c.listing_id, c.customer_name, c.consulted_date, c.consultation_type, c.consultation_note, c.next_contact_date, c.consultation_status, c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number, l.received_date, l.listing_status
-            FROM consultations c JOIN listings l ON l.id = c.listing_id JOIN units u ON u.id = l.unit_id JOIN buildings b ON b.id = u.building_id
+            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.consulted_date, c.consultation_type, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.next_contact_date, c.consultation_status, c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number, l.received_date, l.listing_status
+            FROM consultations c LEFT JOIN listings l ON l.id = c.listing_id LEFT JOIN units u ON u.id = l.unit_id LEFT JOIN buildings b ON b.id = u.building_id
             WHERE {' AND '.join(conditions)} ORDER BY c.consulted_date DESC, c.id DESC
         """, parameters).fetchall()
         return [dict(row) for row in rows]
@@ -36,20 +36,20 @@ def get_consultation_detail(consultation_id: int, path: Path = DATABASE_PATH) ->
     ensure_database_schema(path); connection = get_connection(path)
     try:
         row = connection.execute("""
-            SELECT c.id AS consultation_id, c.listing_id, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_note, c.next_contact_date, c.consultation_status, b.building_name, b.lot_address, u.unit_number, l.received_date
-            FROM consultations c JOIN listings l ON l.id = c.listing_id JOIN units u ON u.id = l.unit_id JOIN buildings b ON b.id = u.building_id
-            WHERE c.id = ? AND b.is_active = 1 AND u.is_active = 1
+            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.next_contact_date, c.consultation_status, b.building_name, b.lot_address, u.unit_number, l.received_date
+            FROM consultations c LEFT JOIN listings l ON l.id = c.listing_id LEFT JOIN units u ON u.id = l.unit_id LEFT JOIN buildings b ON b.id = u.building_id
+            WHERE c.id = ? AND (c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))
         """, (consultation_id,)).fetchone()
         return dict(row) if row else None
     finally: connection.close()
 
 
-def create_consultation(listing_id: int, consultation: dict[str, Any], path: Path = DATABASE_PATH) -> int:
+def create_consultation(listing_id: int | None, consultation: dict[str, Any], path: Path = DATABASE_PATH) -> int:
     ensure_database_schema(path); connection = get_connection(path)
     try:
         with connection:
-            if connection.execute("SELECT 1 FROM listings WHERE id = ?", (listing_id,)).fetchone() is None: raise ValueError("연결할 매물 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
-            cursor = connection.execute("""INSERT INTO consultations (listing_id, customer_name, customer_phone, consulted_date, consultation_type, consultation_note, next_contact_date, consultation_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""", (listing_id, consultation["customer_name"], consultation["customer_phone"], consultation["consulted_date"], consultation["consultation_type"], consultation["consultation_note"], consultation.get("next_contact_date"), consultation["consultation_status"]))
+            if listing_id is not None and connection.execute("SELECT 1 FROM listings WHERE id = ?", (listing_id,)).fetchone() is None: raise ValueError("연결할 매물 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
+            cursor = connection.execute("""INSERT INTO consultations (listing_id, consultation_category, customer_name, customer_phone, consulted_date, consultation_type, consultation_note, desired_area, desired_room_type, desired_deposit_manwon, desired_monthly_rent_manwon, next_contact_date, consultation_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (listing_id, consultation["consultation_category"], consultation["customer_name"], consultation["customer_phone"], consultation["consulted_date"], consultation["consultation_type"], consultation["consultation_note"], consultation.get("desired_area"), consultation.get("desired_room_type"), consultation.get("desired_deposit_manwon"), consultation.get("desired_monthly_rent_manwon"), consultation.get("next_contact_date"), consultation["consultation_status"]))
             return cursor.lastrowid
     finally: connection.close()
 
@@ -58,7 +58,19 @@ def update_consultation(consultation_id: int, values: dict[str, Any], path: Path
     ensure_database_schema(path); connection = get_connection(path)
     try:
         with connection:
-            if connection.execute("UPDATE consultations SET customer_name = ?, customer_phone = ?, consultation_note = ?, next_contact_date = ?, consultation_status = ? WHERE id = ?", (values["customer_name"], values["customer_phone"], values["consultation_note"], values.get("next_contact_date"), values["consultation_status"], consultation_id)).rowcount != 1: raise ValueError("수정할 상담 기록을 찾을 수 없습니다.")
+            if connection.execute("UPDATE consultations SET customer_name = ?, customer_phone = ?, consultation_note = ?, desired_area = ?, desired_room_type = ?, desired_deposit_manwon = ?, desired_monthly_rent_manwon = ?, next_contact_date = ?, consultation_status = ? WHERE id = ?", (values["customer_name"], values["customer_phone"], values["consultation_note"], values.get("desired_area"), values.get("desired_room_type"), values.get("desired_deposit_manwon"), values.get("desired_monthly_rent_manwon"), values.get("next_contact_date"), values["consultation_status"], consultation_id)).rowcount != 1: raise ValueError("수정할 상담 기록을 찾을 수 없습니다.")
+    finally: connection.close()
+
+
+def link_consultation_to_listing(consultation_id: int, listing_id: int, path: Path = DATABASE_PATH) -> None:
+    """일반 상담에 나중에 선택한 매물 기록을 연결한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM listings WHERE id = ?", (listing_id,)).fetchone() is None:
+                raise ValueError("연결할 매물 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
+            if connection.execute("UPDATE consultations SET listing_id = ? WHERE id = ?", (listing_id, consultation_id)).rowcount != 1:
+                raise ValueError("연결할 상담 기록을 찾을 수 없습니다.")
     finally: connection.close()
 
 
