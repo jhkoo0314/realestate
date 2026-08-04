@@ -16,8 +16,6 @@ EXPORT_COLUMNS = [
     ("매물 상태", "listing_status", "text"),
     ("건물명", "building_name", "text"),
     ("지번주소", "lot_address", "text"),
-    ("행정주소", "admin_address", "text"),
-    ("도로명주소", "road_address", "text"),
     ("호실", "unit_number", "text"),
     ("층", "floor_number", "number"),
     ("룸 형태", "room_type", "text"),

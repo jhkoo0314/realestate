@@ -34,12 +34,12 @@ def _validate(unit: dict[str, Any], listing: dict[str, Any]) -> str:
 
 
 def _insert_listing(connection, unit_id: int, listing: dict[str, Any]) -> int:
-    cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,available_from_date,move_out_due_date,photo_status,listing_note,next_check_date,landlord_contact,tenant_contact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("available_from_date"),listing.get("move_out_due_date"),listing.get("photo_status"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact")))
+    cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,available_from_date,move_out_due_date,photo_status,has_listing_photos,cleaning_status,wallpaper_status,repair_status,listing_note,next_check_date,landlord_contact,tenant_contact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("available_from_date"),listing.get("move_out_due_date"),listing.get("photo_status"),listing.get("has_listing_photos","확인 필요"),listing.get("cleaning_status"),listing.get("wallpaper_status"),listing.get("repair_status"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact")))
     return cursor.lastrowid
 
 
 def _insert_unit(connection, building_id: int, unit: dict[str, Any], normalized: str) -> int:
-    cursor=connection.execute("""INSERT INTO units (building_id,unit_number,unit_number_normalized,floor_number,room_type,direction,unit_highlights,access_method,unit_access_password) VALUES (?,?,?,?,?,?,?,?,?)""",(building_id,str(unit["unit_number"]).strip(),normalized,unit.get("floor_number"),unit.get("room_type"),unit.get("direction"),unit.get("unit_highlights"),unit.get("access_method"),unit.get("unit_access_password")))
+    cursor=connection.execute("""INSERT INTO units (building_id,unit_number,unit_number_normalized,floor_number,room_type,direction,unit_options,unit_highlights,access_method,unit_access_password) VALUES (?,?,?,?,?,?,?,?,?,?)""",(building_id,str(unit["unit_number"]).strip(),normalized,unit.get("floor_number"),unit.get("room_type"),unit.get("direction"),unit.get("unit_options"),unit.get("unit_highlights"),unit.get("access_method"),unit.get("unit_access_password")))
     return cursor.lastrowid
 
 

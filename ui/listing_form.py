@@ -13,7 +13,7 @@ from services.listing_service import (
     listing_summary,
     save_confirmed_existing_building_listing,
     save_confirmed_first_listing,
-    save_confirmed_relisting,
+    save_current_listing_for_existing_unit,
     save_current_listing_changes,
     close_listing,
     delete_listing,
@@ -23,23 +23,107 @@ from services.listing_service import (
 )
 from storage.building_repository import get_building_units, get_unit_listing_history, search_buildings
 from storage.listing_create_repository import building_has_unit
-from storage.listing_write_repository import deactivate_unit, get_current_listing, get_unit_relisting_context, has_active_listing
+from storage.listing_write_repository import deactivate_unit, delete_unit, get_current_listing, get_unit_deletion_summary, get_unit_relisting_context
 
 
 INPUT_KEYS = [
     "building_name", "lot_address", "common_entrance_password",
     "has_elevator", "parking_status", "building_internal_note", "unit_number", "floor_number",
     "room_type", "direction", "access_method", "unit_access_password",
-    "unit_highlights", "listing_status", "deposit_manwon", "monthly_rent_manwon",
+    "unit_highlights", "unit_options", "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
-    "photo_status", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
+    "photo_status", "has_listing_photos", "cleaning_status", "wallpaper_status", "repair_status",
+    "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
+
+UNIT_OPTION_LABELS = ["냉장고", "세탁기", "에어컨", "가스렌지", "인덕션", "옷장", "신발장"]
+PHOTO_STATUSES = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
+PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
+SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 
 
 def _clear_registration_inputs() -> None:
     for key in INPUT_KEYS:
         st.session_state.pop(f"registration_{key}", None)
+    for index in range(len(UNIT_OPTION_LABELS)):
+        st.session_state.pop(f"registration_unit_option_{index}", None)
+    st.session_state.pop("registration_unit_options_other", None)
     st.session_state.pop("pending_registration", None)
+
+
+def _clear_relisting_inputs() -> None:
+    """현재 매물 등록 화면을 벗어날 때 이전 입력값을 남기지 않는다."""
+    for key in list(st.session_state):
+        if key.startswith("relisting_"):
+            st.session_state.pop(key, None)
+
+
+def _clear_current_listing_inputs() -> None:
+    for key in list(st.session_state):
+        if key.startswith(("edit_", "close_")):
+            st.session_state.pop(key, None)
+
+
+def _split_unit_options(value: str | None) -> tuple[set[str], str]:
+    selected: set[str] = set()
+    other_items: list[str] = []
+    for item in (value or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if item in UNIT_OPTION_LABELS:
+            selected.add(item)
+        elif item.startswith("기타:"):
+            other_items.append(item.removeprefix("기타:").strip())
+        else:
+            other_items.append(item)
+    return selected, ", ".join(item for item in other_items if item)
+
+
+def _render_unit_option_checkboxes(key_prefix: str, saved_options: str | None = None) -> str | None:
+    selected_before, other_before = _split_unit_options(saved_options)
+    for index, label in enumerate(UNIT_OPTION_LABELS):
+        key = f"{key_prefix}_option_{index}"
+        if key not in st.session_state:
+            st.session_state[key] = label in selected_before
+    other_key = f"{key_prefix}_options_other"
+    if other_key not in st.session_state:
+        st.session_state[other_key] = other_before
+
+    option_columns = st.columns(4)
+    selected_options = []
+    for index, label in enumerate(UNIT_OPTION_LABELS):
+        with option_columns[index % len(option_columns)]:
+            if st.checkbox(label, key=f"{key_prefix}_option_{index}"):
+                selected_options.append(label)
+    other_option = st.text_input("기타 옵션 메모", key=other_key, placeholder="예: 전자레인지, 침대")
+    if other_option.strip():
+        selected_options.append(f"기타: {other_option.strip()}")
+    return ", ".join(selected_options) or None
+
+
+def _status_index(options: list[str], value: str | None) -> int:
+    return options.index(value) if value in options else 0
+
+
+def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
+    """현황 리스트의 자동 업무 계산에 쓰는 관리 상태를 같은 이름으로 입력한다."""
+    values = values or {}
+    photo_status = st.session_state.get(f"{key_prefix}_photo_status", values.get("photo_status"))
+    st.markdown("##### 확인·관리 사항")
+    st.caption("아래 상태를 저장하면 현황리스트의 ‘해야 할 일’이 자동으로 표시됩니다. 할 일을 따로 입력하지 않습니다.")
+    left, middle, right = st.columns(3)
+    with left:
+        if photo_status == "촬영 완료":
+            st.text_input("사진 보유 여부", value="있음", disabled=True, help="사진 촬영 완료를 선택하면 자동으로 ‘있음’으로 저장됩니다.")
+        else:
+            st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=_status_index(PHOTO_AVAILABILITY, values.get("has_listing_photos")), key=f"{key_prefix}_has_listing_photos")
+        st.selectbox("청소 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("cleaning_status")), key=f"{key_prefix}_cleaning_status")
+    with middle:
+        st.selectbox("도배 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("wallpaper_status")), key=f"{key_prefix}_wallpaper_status")
+    with right:
+        st.selectbox("수리 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("repair_status")), key=f"{key_prefix}_repair_status")
+        st.date_input("재확인 예정일", value=_date_value(values.get("next_check_date")), key=f"{key_prefix}_next_check_date")
 
 
 def _field_value(name: str):
@@ -61,8 +145,8 @@ def _collect_input() -> dict:
 def _clear_selected_building() -> None:
     st.session_state.pop("selected_registration_building", None)
     st.session_state.pop("selected_registration_unit_id", None)
-    st.session_state.pop("relisting_confirmed_unit_id", None)
-    st.session_state.pop("editing_listing_unit_id", None)
+    _clear_relisting_inputs()
+    _clear_current_listing_inputs()
     st.session_state.pop("registration_unit_number", None)
 
 
@@ -82,9 +166,9 @@ def _select_building(building: dict) -> None:
 
 
 def _select_unit_for_relisting(unit_id: int) -> None:
+    _clear_relisting_inputs()
+    _clear_current_listing_inputs()
     st.session_state["selected_registration_unit_id"] = unit_id
-    st.session_state.pop("relisting_confirmed_unit_id", None)
-    st.session_state.pop("editing_listing_unit_id", None)
     st.session_state.pop("pending_registration", None)
 
 
@@ -153,11 +237,11 @@ def _render_existing_building_summary(building: dict) -> None:
             use_container_width=True,
             hide_index=True,
         )
-        st.caption("같은 호실이 다시 매물로 나왔다면 아래에서 선택해 새 매물 회차를 만드세요.")
+        st.caption("같은 호실이 다시 매물로 나왔다면 아래에서 선택하세요. 이번 매물 입력칸이 바로 열립니다.")
         unit_columns = st.columns(min(len(units), 4))
         for index, unit in enumerate(units):
             with unit_columns[index % len(unit_columns)]:
-                if st.button(f"{unit['unit_number']} 재등록", key=f"relist_unit_{unit['id']}", use_container_width=True):
+                if st.button(f"{unit['unit_number']} 최신 정보 수정", key=f"relist_unit_{unit['id']}", use_container_width=True):
                     _select_unit_for_relisting(unit["id"])
                     st.rerun()
     st.info("새 호실을 등록합니다. 주소·공동현관·엘리베이터·주차 정보는 다시 입력하지 않습니다.")
@@ -178,7 +262,10 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     if building and (unit_number := _field_value("unit_number")):
         duplicate_unit = building_has_unit(building["id"], str(unit_number))
         if duplicate_unit:
-            st.error(f"{unit_number}는 이미 등록된 호실입니다. 이 단계에서는 새 호실을 저장할 수 없습니다. 기존 호실 재등록은 다음 단계에서 연결됩니다.")
+            st.error(f"{unit_number}는 이미 등록된 호실입니다. 위 목록에서 해당 호실의 ‘최신 정보 수정’을 선택해 주세요.")
+
+    st.markdown("##### 호실 옵션")
+    st.session_state["registration_unit_options"] = _render_unit_option_checkboxes("registration_unit")
 
     with st.expander("호실 상세정보"):
         detail_left, detail_right = st.columns(2)
@@ -201,12 +288,12 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     with listing_right:
         st.date_input("매물 접수일", value=date.today(), key="registration_received_date", help="기본값은 오늘입니다. 실제 접수일이 다르면 바꿔 주세요.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="registration_management_fee_manwon")
-        st.selectbox("사진 상태", ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"], key="registration_photo_status")
+        st.selectbox("사진 상태", PHOTO_STATUSES, key="registration_photo_status")
 
     if _field_value("availability_type") == "날짜 지정":
         st.date_input("입주 가능일 *", value=None, key="registration_available_from_date")
     st.date_input("퇴실 예정일", value=None, key="registration_move_out_due_date")
-    st.date_input("재확인 예정일", value=None, key="registration_next_check_date")
+    _render_management_fields("registration")
     st.text_area("이번 매물 메모", key="registration_listing_note", placeholder="예: 세입자와 방문시간 협의 필요")
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
@@ -252,19 +339,42 @@ def _date_value(value: str | None):
     return date.fromisoformat(value) if value else None
 
 
+def _render_unit_complete_delete(unit_id: int, context: dict) -> None:
+    summary = get_unit_deletion_summary(unit_id)
+    unit_label = context["unit_number"] if context["unit_number"].endswith("호") else f"{context['unit_number']}호"
+    with st.expander("이 호실 완전 삭제"):
+        st.error(f"{context['building_name']} {unit_label}와 연결된 매물 {summary['listings']}건, 계약 {summary['contracts']}건, 상담 {summary['consultations']}건을 복구할 수 없게 삭제합니다. 건물 정보는 남습니다.")
+        confirmed = st.checkbox("이 호실과 연결된 모든 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"delete_unit_confirm_{unit_id}")
+        if st.button("호실 완전 삭제", type="secondary", disabled=not confirmed, key=f"delete_unit_{unit_id}"):
+            try:
+                deleted = delete_unit(unit_id)
+            except Exception as error:
+                st.error(f"호실을 삭제하지 못했습니다. ({error})")
+                return
+            _clear_current_listing_inputs()
+            _clear_relisting_inputs()
+            st.session_state.pop("selected_registration_unit_id", None)
+            st.success(f"호실을 삭제했습니다. 매물 {deleted['listings']}건, 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건도 함께 삭제했습니다. 건물 정보는 남아 있습니다.")
+            st.rerun()
+
+
 def _render_current_listing_edit(unit_id: int) -> None:
     context = get_unit_relisting_context(unit_id)
     listing = get_current_listing(unit_id)
     if context is None or listing is None:
-        st.error("수정할 현재 매물을 찾을 수 없습니다. 다른 호실을 선택해 주세요.")
+        _render_relisting_form(unit_id)
         return
 
     unit_label = context["unit_number"] if context["unit_number"].endswith("호") else f"{context['unit_number']}호"
-    st.markdown("#### 현재 매물 수정")
-    st.info(f"수정 대상: {context['building_name']} · {unit_label} · 접수일 {listing['received_date']}")
-    st.caption("이 화면에서 저장해도 새 매물 기록은 생기지 않습니다. 현재 기록의 조건만 바뀝니다.")
-    if st.button("재등록 선택으로 돌아가기", key="back_to_relisting"):
-        st.session_state.pop("editing_listing_unit_id", None)
+    st.markdown("#### 기존 호실 최신 정보 수정")
+    st.info(f"수정 대상: {context['building_name']} · {unit_label} · 최초 접수일 {listing['received_date']}")
+    if listing.get("closed_date") or listing.get("listing_status") in ("계약 완료", "종료"):
+        st.warning("마지막 매물은 종료 상태입니다. 아래에서 저장하면 종료 상태를 지우고 최신 매물 상태로 바꿉니다.")
+    else:
+        st.caption("저장하면 새 매물 기록을 만들지 않고, 이 호실의 최신 매물 정보만 바꿉니다. 연결된 계약·상담 기록은 유지됩니다.")
+    if st.button("다른 호실 선택", key="back_to_relisting"):
+        st.session_state.pop("selected_registration_unit_id", None)
+        _clear_current_listing_inputs()
         st.rerun()
 
     left, middle, right = st.columns(3)
@@ -277,17 +387,17 @@ def _render_current_listing_edit(unit_id: int) -> None:
         availability_index = AVAILABILITY_TYPES.index(listing["availability_type"]) if listing["availability_type"] in AVAILABILITY_TYPES else 0
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, index=availability_index, key="edit_availability_type")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=listing["management_fee_manwon"], key="edit_management_fee_manwon")
-        photo_options = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
-        photo_index = photo_options.index(listing["photo_status"]) if listing["photo_status"] in photo_options else 0
-        st.selectbox("사진 상태", photo_options, index=photo_index, key="edit_photo_status")
+        st.selectbox("사진 상태", PHOTO_STATUSES, index=_status_index(PHOTO_STATUSES, listing["photo_status"]), key="edit_photo_status")
     with right:
         if st.session_state.get("edit_availability_type", listing["availability_type"]) == "날짜 지정":
             st.date_input("입주 가능일 *", value=_date_value(listing["available_from_date"]), key="edit_available_from_date")
         st.date_input("퇴실 예정일", value=_date_value(listing["move_out_due_date"]), key="edit_move_out_due_date")
-        st.date_input("재확인 예정일", value=_date_value(listing["next_check_date"]), key="edit_next_check_date")
         if st.session_state.get("edit_photo_status", listing["photo_status"]) == "촬영 완료":
             st.date_input("사진 촬영일", value=date.today(), key="edit_last_photo_date")
+    _render_management_fields("edit", listing)
     st.text_area("이번 매물 메모", value=listing["listing_note"] or "", key="edit_listing_note")
+    st.markdown("##### 호실 옵션")
+    unit_options = _render_unit_option_checkboxes("edit_unit", context.get("unit_options"))
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
         with contact_left:
@@ -296,7 +406,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
             st.text_input("세입자 연락처", value=listing["tenant_contact"] or "", key="edit_tenant_contact")
         st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
-    if st.button("현재 매물 수정", type="primary"):
+    if st.button("최신 정보 저장", type="primary"):
         raw = {
             "listing_status": st.session_state.get("edit_listing_status"),
             "deposit_manwon": st.session_state.get("edit_deposit_manwon"),
@@ -306,11 +416,16 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "available_from_date": st.session_state.get("edit_available_from_date"),
             "move_out_due_date": st.session_state.get("edit_move_out_due_date"),
             "photo_status": st.session_state.get("edit_photo_status"),
+            "has_listing_photos": st.session_state.get("edit_has_listing_photos"),
+            "cleaning_status": st.session_state.get("edit_cleaning_status"),
+            "wallpaper_status": st.session_state.get("edit_wallpaper_status"),
+            "repair_status": st.session_state.get("edit_repair_status"),
             "last_photo_date": st.session_state.get("edit_last_photo_date"),
             "next_check_date": st.session_state.get("edit_next_check_date"),
             "listing_note": st.session_state.get("edit_listing_note"),
             "landlord_contact": st.session_state.get("edit_landlord_contact"),
             "tenant_contact": st.session_state.get("edit_tenant_contact"),
+            "unit_options": unit_options,
         }
         updated, errors = validate_current_listing(raw)
         if errors:
@@ -322,7 +437,9 @@ def _render_current_listing_edit(unit_id: int) -> None:
         except Exception as error:
             st.error(f"수정하지 못했습니다. 입력 내용은 유지됩니다. ({error})")
             return
-        st.success("현재 매물 조건을 수정했습니다. 새 매물 기록은 만들지 않았습니다.")
+        _clear_current_listing_inputs()
+        st.session_state.pop("selected_registration_unit_id", None)
+        st.success("최신 매물 정보를 저장했습니다. 새 매물 기록은 만들지 않았고, 계약·상담 기록은 유지됩니다.")
         st.rerun()
 
     with st.expander("이 매물 종료 처리"):
@@ -335,7 +452,8 @@ def _render_current_listing_edit(unit_id: int) -> None:
             except Exception as error:
                 st.error(f"종료 처리하지 못했습니다. ({error})")
                 return
-            st.session_state.pop("editing_listing_unit_id", None)
+            _clear_current_listing_inputs()
+            st.session_state.pop("selected_registration_unit_id", None)
             st.success("매물을 종료 처리했습니다. 기록은 과거 이력에 남아 있습니다.")
             st.rerun()
 
@@ -348,10 +466,11 @@ def _render_current_listing_edit(unit_id: int) -> None:
             except Exception as error:
                 st.error(f"매물을 삭제하지 못했습니다. ({error})")
                 return
-            st.session_state.pop("editing_listing_unit_id", None)
             st.session_state.pop("selected_registration_unit_id", None)
             st.success(f"매물을 삭제했습니다. 연결된 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건도 함께 삭제했습니다.")
             st.rerun()
+
+    _render_unit_complete_delete(unit_id, context)
 
 
 def _render_relisting_form(unit_id: int) -> None:
@@ -362,10 +481,10 @@ def _render_relisting_form(unit_id: int) -> None:
     history = get_unit_listing_history(unit_id)
     previous = history[0] if history else None
 
-    st.markdown("#### 기존 호실 재등록")
+    st.markdown("#### 기존 호실 현재 매물 등록")
     if st.button("다른 호실 선택", key="change_relisting_unit"):
         st.session_state.pop("selected_registration_unit_id", None)
-        st.session_state.pop("relisting_confirmed_unit_id", None)
+        _clear_relisting_inputs()
         st.rerun()
 
     unit_label = context["unit_number"] if context["unit_number"].endswith("호") else f"{context['unit_number']}호"
@@ -384,41 +503,10 @@ def _render_relisting_form(unit_id: int) -> None:
             f"**이전 매물 참고값:** {price} · 관리비 {previous['management_fee_manwon'] or '미입력'}만원 · "
             f"상태 {previous['listing_status']} · 마지막 등록 {previous['received_date']}"
         )
-        st.caption("이전 가격과 상태는 참고용입니다. 아래 입력칸에 자동으로 넣지 않습니다.")
-
-    if has_active_listing(unit_id) and st.session_state.get("relisting_confirmed_unit_id") != unit_id:
-        st.warning("현재 운영 중인 매물 기록이 있습니다. 단순한 조건 변경은 다음 단계의 ‘현재 매물 수정’ 기능으로 처리합니다.")
-        left, right = st.columns(2)
-        with left:
-            if st.button("현재 매물 수정", use_container_width=True):
-                st.session_state["editing_listing_unit_id"] = unit_id
-                st.rerun()
-        with right:
-            if st.button("그래도 새 매물 회차 생성", type="primary", use_container_width=True):
-                st.session_state["relisting_confirmed_unit_id"] = unit_id
-                st.rerun()
-        return
-
-    if not has_active_listing(unit_id) and st.session_state.get("relisting_confirmed_unit_id") != unit_id:
-        if st.button("새 매물 회차 생성", type="primary"):
-            st.session_state["relisting_confirmed_unit_id"] = unit_id
-            st.rerun()
-        with st.expander("이 호실을 더 이상 사용하지 않음"):
-            st.caption("호실을 삭제하지 않고 목록에서 숨깁니다. 과거 매물 기록은 남습니다.")
-            confirmed = st.checkbox("이 호실을 비활성화하는 것을 확인했습니다.", key=f"deactivate_unit_confirm_{unit_id}")
-            if st.button("호실 비활성화", disabled=not confirmed, key=f"deactivate_unit_{unit_id}"):
-                try:
-                    deactivate_unit(unit_id)
-                except Exception as error:
-                    st.error(f"호실을 비활성화하지 못했습니다. ({error})")
-                    return
-                st.session_state.pop("selected_registration_unit_id", None)
-                st.success("호실을 삭제하지 않고 비활성화했습니다. 과거 기록은 보존됩니다.")
-                st.rerun()
-        return
+        st.caption("이 호실에는 현재 매물 기록이 없습니다. 아래에서 현재 매물 정보를 등록합니다.")
 
     st.divider()
-    st.markdown("#### 이번 매물 조건")
+    st.markdown("#### 현재 매물 조건")
     left, middle, right = st.columns(3)
     with left:
         st.selectbox("매물 상태 *", LISTING_STATUSES, key="relisting_listing_status")
@@ -433,11 +521,11 @@ def _render_relisting_form(unit_id: int) -> None:
     with right:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="relisting_availability_type")
         st.date_input("매물 접수일", value=date.today(), key="relisting_received_date")
-        st.selectbox("사진 상태", ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"], key="relisting_photo_status")
+        st.selectbox("사진 상태", PHOTO_STATUSES, key="relisting_photo_status")
     if st.session_state.get("relisting_availability_type") == "날짜 지정":
         st.date_input("입주 가능일 *", value=None, key="relisting_available_from_date")
     st.date_input("퇴실 예정일", value=None, key="relisting_move_out_due_date")
-    st.date_input("재확인 예정일", value=None, key="relisting_next_check_date")
+    _render_management_fields("relisting")
     st.text_area("이번 매물 메모", key="relisting_listing_note")
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
@@ -447,7 +535,7 @@ def _render_relisting_form(unit_id: int) -> None:
             st.text_input("세입자 연락처", key="relisting_tenant_contact", placeholder="예: 010-1234-5678")
         st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
-    if st.button("새 매물 회차로 등록", type="primary"):
+    if st.button("현재 매물 등록", type="primary"):
         raw = {
             "listing_status": st.session_state.get("relisting_listing_status"),
             "price_mode": st.session_state.get("relisting_price_mode"),
@@ -459,6 +547,10 @@ def _render_relisting_form(unit_id: int) -> None:
             "received_date": st.session_state.get("relisting_received_date"),
             "move_out_due_date": st.session_state.get("relisting_move_out_due_date"),
             "photo_status": st.session_state.get("relisting_photo_status"),
+            "has_listing_photos": st.session_state.get("relisting_has_listing_photos"),
+            "cleaning_status": st.session_state.get("relisting_cleaning_status"),
+            "wallpaper_status": st.session_state.get("relisting_wallpaper_status"),
+            "repair_status": st.session_state.get("relisting_repair_status"),
             "next_check_date": st.session_state.get("relisting_next_check_date"),
             "listing_note": st.session_state.get("relisting_listing_note"),
             "landlord_contact": st.session_state.get("relisting_landlord_contact"),
@@ -470,18 +562,35 @@ def _render_relisting_form(unit_id: int) -> None:
                 st.error(error)
             return
         try:
-            save_confirmed_relisting(unit_id, listing)
+            save_current_listing_for_existing_unit(unit_id, listing)
         except Exception as error:
             st.error(f"저장하지 못했습니다. 입력 내용은 유지됩니다. ({error})")
             return
-        st.success(f"{context['building_name']} {unit_label}의 새 매물 회차가 등록되었습니다.")
-        st.session_state.pop("relisting_confirmed_unit_id", None)
+        st.success(f"{context['building_name']} {unit_label}의 현재 매물 정보가 등록되었습니다.")
+        _clear_relisting_inputs()
+        st.session_state.pop("selected_registration_unit_id", None)
         st.rerun()
+
+    with st.expander("이 호실을 더 이상 사용하지 않음"):
+        st.caption("호실을 삭제하지 않고 목록에서 숨깁니다. 과거 매물 기록은 남습니다.")
+        confirmed = st.checkbox("이 호실을 비활성화하는 것을 확인했습니다.", key=f"deactivate_unit_confirm_{unit_id}")
+        if st.button("호실 비활성화", disabled=not confirmed, key=f"deactivate_unit_{unit_id}"):
+            try:
+                deactivate_unit(unit_id)
+            except Exception as error:
+                st.error(f"호실을 비활성화하지 못했습니다. ({error})")
+                return
+            _clear_relisting_inputs()
+            st.session_state.pop("selected_registration_unit_id", None)
+            st.success("호실을 삭제하지 않고 비활성화했습니다. 과거 기록은 보존됩니다.")
+            st.rerun()
+
+    _render_unit_complete_delete(unit_id, context)
 
 
 def render_listing_form() -> None:
     st.subheader("매물 등록·수정")
-    st.markdown("기존 건물을 먼저 찾은 뒤 새 호실과 첫 매물을 등록합니다. 기존 호실 재등록은 다음 단계에서 연결합니다.")
+    st.markdown("기존 건물을 먼저 찾은 뒤 새 호실과 첫 매물을 등록합니다. 기존 호실을 선택하면 최신 매물 정보를 바로 수정할 수 있습니다.")
 
     if success_message := st.session_state.pop("registration_success", None):
         st.success(success_message)
@@ -493,10 +602,7 @@ def render_listing_form() -> None:
     building = _render_building_search()
     selected_unit_id = st.session_state.get("selected_registration_unit_id")
     if building and selected_unit_id:
-        if st.session_state.get("editing_listing_unit_id") == selected_unit_id:
-            _render_current_listing_edit(selected_unit_id)
-            return
-        _render_relisting_form(selected_unit_id)
+        _render_current_listing_edit(selected_unit_id)
         return
     if building:
         _render_existing_building_summary(building)

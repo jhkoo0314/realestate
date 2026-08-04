@@ -55,7 +55,7 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
     for item in listings:
         tasks=[]
         if item["next_check_date"] and item["next_check_date"] <= today: tasks.append("재확인 필요")
-        if item["photo_status"] == "촬영 필요" or item["has_listing_photos"] == "없음": tasks.append("사진 촬영 필요")
+        if item["photo_status"] == "촬영 필요" or (item["photo_status"] != "촬영 완료" and item["has_listing_photos"] == "없음"): tasks.append("사진 촬영 필요")
         if any(item[field] in ("필요", "진행 중") for field in ("cleaning_status","wallpaper_status","repair_status")): tasks.append("현장 상태 확인 필요")
         if item["availability_type"] == "확인 필요": tasks.append("입주 가능일 확인 필요")
         if item["listing_status"] == "확인 필요": tasks.append("매물 상태 확인 필요")
@@ -63,10 +63,10 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
     return [item for item in listings if not task_filter or task_filter in item["tasks"]]
 
 
-def update_listing_quick_fields(listing_id: int, listing_status: str, photo_status: str, has_listing_photos: str, next_check_date: str | None, path: Path = DATABASE_PATH) -> None:
+def update_listing_quick_fields(listing_id: int, listing_status: str, photo_status: str, has_listing_photos: str, next_check_date: str | None, cleaning_status: str | None, wallpaper_status: str | None, repair_status: str | None, path: Path = DATABASE_PATH) -> None:
     ensure_database_schema(path); connection=get_connection(path)
     try:
         with connection:
             if connection.execute("SELECT 1 FROM listings WHERE id=? AND closed_date IS NULL",(listing_id,)).fetchone() is None: raise ValueError("수정할 현재 매물을 찾을 수 없습니다.")
-            connection.execute("UPDATE listings SET listing_status=?, photo_status=?, has_listing_photos=?, next_check_date=? WHERE id=?",(listing_status,photo_status,has_listing_photos,next_check_date,listing_id))
+            connection.execute("UPDATE listings SET listing_status=?, photo_status=?, has_listing_photos=?, next_check_date=?, cleaning_status=?, wallpaper_status=?, repair_status=? WHERE id=?",(listing_status,photo_status,has_listing_photos,next_check_date,cleaning_status,wallpaper_status,repair_status,listing_id))
     finally: connection.close()

@@ -73,6 +73,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "floor_number": raw.get("floor_number"),
             "room_type": raw.get("room_type"),
             "direction": raw.get("direction"),
+            "unit_options": _clean_text(raw.get("unit_options")),
             "access_method": raw.get("access_method"),
             "unit_access_password": _clean_text(raw.get("unit_access_password")),
             "unit_highlights": _clean_text(raw.get("unit_highlights")),
@@ -87,6 +88,10 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "available_from_date": _date_text(available_from_date),
             "move_out_due_date": _date_text(raw.get("move_out_due_date")),
             "photo_status": raw.get("photo_status"),
+            "has_listing_photos": "있음" if raw.get("photo_status") == "촬영 완료" else raw.get("has_listing_photos") or "확인 필요",
+            "cleaning_status": raw.get("cleaning_status"),
+            "wallpaper_status": raw.get("wallpaper_status"),
+            "repair_status": raw.get("repair_status"),
             "listing_note": _clean_text(raw.get("listing_note")),
             "landlord_contact": _clean_text(raw.get("landlord_contact")),
             "tenant_contact": _clean_text(raw.get("tenant_contact")),
@@ -126,7 +131,7 @@ def save_confirmed_existing_building_listing(
 
 
 def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
-    """재등록할 이번 매물 조건만 검사한다. 이전 회차 값은 바꾸지 않는다."""
+    """현재 매물 기록이 없는 기존 호실의 첫 현재 매물 조건을 검사한다."""
     errors: list[str] = []
     listing_status = raw.get("listing_status")
     availability_type = raw.get("availability_type")
@@ -167,6 +172,10 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
         "available_from_date": _date_text(available_from_date),
         "move_out_due_date": _date_text(raw.get("move_out_due_date")),
         "photo_status": raw.get("photo_status"),
+        "has_listing_photos": "있음" if raw.get("photo_status") == "촬영 완료" else raw.get("has_listing_photos") or "확인 필요",
+        "cleaning_status": raw.get("cleaning_status"),
+        "wallpaper_status": raw.get("wallpaper_status"),
+        "repair_status": raw.get("repair_status"),
         "listing_note": note,
         "landlord_contact": _clean_text(raw.get("landlord_contact")),
         "tenant_contact": _clean_text(raw.get("tenant_contact")),
@@ -175,8 +184,8 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
     }, []
 
 
-def save_confirmed_relisting(unit_id: int, listing: dict[str, Any]) -> int:
-    """기존 호실에 새 매물 회차를 추가한다."""
+def save_current_listing_for_existing_unit(unit_id: int, listing: dict[str, Any]) -> int:
+    """현재 매물 기록이 없는 기존 호실에 현재 매물 1건을 등록한다."""
     return save_new_listing_round(unit_id, listing)
 
 
@@ -187,6 +196,7 @@ def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None
     if errors or listing is None:
         return listing, errors
     listing["last_photo_date"] = _date_text(raw.get("last_photo_date"))
+    listing["unit_options"] = _clean_text(raw.get("unit_options"))
     return listing, []
 
 
