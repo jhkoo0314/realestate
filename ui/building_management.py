@@ -15,6 +15,7 @@ from storage.building_repository import (
     get_unit_management_detail,
     get_unit_password,
     search_buildings,
+    rename_unit,
     update_building_management_detail,
     update_current_listing_option_note,
     update_unit_management_detail,
@@ -163,6 +164,19 @@ def _render_unit_detail(unit_id: int) -> None:
             st.success("호실 기본정보를 저장했습니다.")
             st.rerun()
 
+    with st.expander("호실 번호 정정"):
+        st.caption("오입력한 호실 번호만 정정합니다. 연결된 매물·계약·상담 이력은 유지되며, 같은 건물에 이미 있는 호실 번호로는 바꿀 수 없습니다.")
+        new_unit_number = st.text_input("새 호실 번호", value=unit["unit_number"], key=f"unit_rename_{unit_id}")
+        rename_confirmed = st.checkbox("매물·계약·상담 이력은 유지한 채 호실 번호만 정정하는 것을 확인했습니다.", key=f"unit_rename_confirm_{unit_id}")
+        if st.button("호실 번호 정정 저장", type="primary", disabled=not rename_confirmed, key=f"unit_rename_save_{unit_id}"):
+            try:
+                old_unit_number = rename_unit(unit_id, new_unit_number)
+            except ValueError as error:
+                st.error(str(error))
+            else:
+                st.success(f"{old_unit_number}호를 {new_unit_number.strip().removesuffix('호')}호로 정정했습니다. 연결된 이력은 유지됩니다.")
+                st.rerun()
+
     with st.expander("이번 매물에만 다른 옵션"):
         st.caption("이 내용은 호실 기본 옵션을 바꾸지 않고 현재 매물 기록에만 남습니다.")
         option_note = st.text_area("이번 매물 옵션 변경 메모", key=f"option_note_{unit_id}")
@@ -179,7 +193,7 @@ def _render_unit_detail(unit_id: int) -> None:
     if history:
         rows = [{
             "접수일": item["received_date"], "상태": item["listing_status"],
-            "보증금": item["deposit_manwon"] or "확인 필요", "월세": item["monthly_rent_manwon"] or "확인 필요",
+            "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-", "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-",
             "관리비": item["management_fee_manwon"] or "-", "입주 가능": item["availability_type"],
             "종료일": item["closed_date"] or "-", "종료 사유": item["close_reason"] or "-",
             "이번 매물 옵션 변경": item["option_change_note"] or "-",

@@ -42,6 +42,9 @@ def _rows(items: list[dict]) -> list[dict]:
 
 def _render_registration() -> None:
     st.markdown("#### 상담 등록")
+    registration_notice = st.session_state.pop("consultation_registration_notice", None)
+    if registration_notice:
+        st.success(registration_notice)
     category = st.radio("상담 구분", CONSULTATION_CATEGORIES, horizontal=True, key="consultation_category")
     if category == "일반 상담":
         st.caption("아직 연결할 매물이 없거나 여러 매물을 함께 보는 상담을 기록합니다.")
@@ -80,7 +83,7 @@ def _render_registration() -> None:
             except ValueError as error:
                 st.error(str(error))
             else:
-                st.success("일반 상담을 등록했습니다.")
+                st.session_state["consultation_registration_notice"] = "일반 상담 등록을 완료했습니다. 상담 조회·수정에서 등록 내용과 해야 할 일을 확인할 수 있습니다."
                 st.rerun()
         return
 
@@ -139,7 +142,7 @@ def _render_registration() -> None:
         except ValueError as error:
             st.error(str(error))
         else:
-            st.success("새 상담 기록을 추가했습니다. 기존 상담과 매물 기록은 변경되지 않았습니다.")
+            st.session_state["consultation_registration_notice"] = "매물 상담 등록을 완료했습니다. 기존 상담과 매물 기록은 변경되지 않았습니다."
             st.session_state.pop("consultation_selected_listing", None)
             st.rerun()
 

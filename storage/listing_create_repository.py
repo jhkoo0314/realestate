@@ -44,11 +44,12 @@ def _insert_unit(connection, building_id: int, unit: dict[str, Any], normalized:
 
 
 def save_first_listing(building: dict[str, Any], unit: dict[str, Any], listing: dict[str, Any], path: Path = DATABASE_PATH) -> tuple[int,int,int]:
-    if not building.get("building_name") or not building.get("lot_address"): raise ValueError("건물명과 지번을 입력해 주세요.")
+    if not building.get("lot_address"): raise ValueError("지번을 입력해 주세요.")
+    building_name = str(building.get("building_name") or "건물명 미입력").strip() or "건물명 미입력"
     normalized=_validate(unit,listing); require_database(path); connection=get_connection(path)
     try:
         with connection:
-            cursor=connection.execute("""INSERT INTO buildings (building_name,lot_address,admin_address,road_address,common_entrance_password,has_elevator,parking_status,internal_note) VALUES (?,?,?,?,?,?,?,?)""",(building["building_name"].strip(),building["lot_address"].strip(),building.get("admin_address"),building.get("road_address"),building.get("common_entrance_password"),building.get("has_elevator"),building.get("parking_status"),building.get("internal_note")))
+            cursor=connection.execute("""INSERT INTO buildings (building_name,lot_address,admin_address,road_address,common_entrance_password,has_elevator,parking_status,internal_note) VALUES (?,?,?,?,?,?,?,?)""",(building_name,building["lot_address"].strip(),building.get("admin_address"),building.get("road_address"),building.get("common_entrance_password"),building.get("has_elevator"),building.get("parking_status"),building.get("internal_note")))
             building_id=cursor.lastrowid; unit_id=_insert_unit(connection,building_id,unit,normalized); return building_id,unit_id,_insert_listing(connection,unit_id,listing)
     finally: connection.close()
 

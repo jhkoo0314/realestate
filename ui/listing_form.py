@@ -37,7 +37,7 @@ INPUT_KEYS = [
     "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
-UNIT_OPTION_LABELS = ["냉장고", "세탁기", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
+UNIT_OPTION_LABELS = ["냉장고", "세탁기", "전자레인지", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 
@@ -96,7 +96,7 @@ def _render_unit_option_checkboxes(key_prefix: str, saved_options: str | None = 
         with option_columns[index % len(option_columns)]:
             if st.checkbox(label, key=f"{key_prefix}_option_{index}"):
                 selected_options.append(label)
-    other_option = st.text_input("기타 옵션 메모", key=other_key, placeholder="예: 전자레인지, 침대")
+    other_option = st.text_input("기타 옵션 메모", key=other_key, placeholder="예: 침대, 식탁")
     if other_option.strip():
         selected_options.append(f"기타: {other_option.strip()}")
     return ", ".join(selected_options) or None
@@ -210,9 +210,10 @@ def _render_new_building_fields() -> None:
     st.markdown("#### 2. 새 건물 정보")
     building_left, building_right = st.columns(2)
     with building_left:
-        st.text_input("건물명 *", key="registration_building_name", placeholder="예: 대성빌")
+        st.text_input("건물명 (선택)", key="registration_building_name", placeholder="예: 대성빌 · 모르면 비워 두세요")
     with building_right:
         st.text_input("지번 *", key="registration_lot_address", placeholder="예: 북수리 1026")
+    st.caption("건물명을 모르면 비워 두세요. 지번과 호수로 등록하며, 목록에는 `건물명 미입력`으로 표시됩니다.")
     st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password", type="password")
     with st.expander("건물 상세정보"):
         detail_left, detail_right = st.columns(2)
@@ -281,13 +282,14 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     listing_left, listing_middle, listing_right = st.columns(3)
     with listing_left:
         st.selectbox("매물 상태 *", LISTING_STATUSES, index=1, key="registration_listing_status")
-        st.number_input("보증금 (만원) *", min_value=0, step=10, value=None, key="registration_deposit_manwon")
+        st.number_input("보증금 (만원, 선택)", min_value=0, step=10, value=None, key="registration_deposit_manwon")
     with listing_middle:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="registration_availability_type")
-        st.number_input("월세 (만원) *", min_value=0, step=1, value=None, key="registration_monthly_rent_manwon")
+        st.number_input("월세 (만원, 선택)", min_value=0, step=1, value=None, key="registration_monthly_rent_manwon")
     with listing_right:
         st.date_input("매물 접수일", value=date.today(), key="registration_received_date", help="기본값은 오늘입니다. 실제 접수일이 다르면 바꿔 주세요.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="registration_management_fee_manwon")
+    st.caption("보증금과 월세는 선택 입력입니다. 전세 매물은 월세를 비워 두세요.")
 
     if _field_value("availability_type") == "날짜 지정":
         st.date_input("입주 가능일 *", value=None, key="registration_available_from_date")
@@ -380,8 +382,8 @@ def _render_current_listing_edit(unit_id: int) -> None:
     with left:
         status_index = LISTING_STATUSES.index(listing["listing_status"]) if listing["listing_status"] in LISTING_STATUSES else 0
         st.selectbox("매물 상태 *", LISTING_STATUSES, index=status_index, key="edit_listing_status")
-        st.number_input("보증금 (만원) *", min_value=0, step=10, value=listing["deposit_manwon"], key="edit_deposit_manwon")
-        st.number_input("월세 (만원) *", min_value=0, step=1, value=listing["monthly_rent_manwon"], key="edit_monthly_rent_manwon")
+        st.number_input("보증금 (만원, 선택)", min_value=0, step=10, value=listing["deposit_manwon"], key="edit_deposit_manwon")
+        st.number_input("월세 (만원, 선택)", min_value=0, step=1, value=listing["monthly_rent_manwon"], key="edit_monthly_rent_manwon")
     with middle:
         availability_index = AVAILABILITY_TYPES.index(listing["availability_type"]) if listing["availability_type"] in AVAILABILITY_TYPES else 0
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, index=availability_index, key="edit_availability_type")
@@ -507,8 +509,9 @@ def _render_relisting_form(unit_id: int) -> None:
         price_mode = st.radio("가격 입력 방식", ["새 가격 입력", "가격 확인 필요"], key="relisting_price_mode")
     with middle:
         if price_mode == "새 가격 입력":
-            st.number_input("보증금 (만원) *", min_value=0, step=10, value=None, key="relisting_deposit_manwon")
-            st.number_input("월세 (만원) *", min_value=0, step=1, value=None, key="relisting_monthly_rent_manwon")
+            st.number_input("보증금 (만원, 선택)", min_value=0, step=10, value=None, key="relisting_deposit_manwon")
+            st.number_input("월세 (만원, 선택)", min_value=0, step=1, value=None, key="relisting_monthly_rent_manwon")
+            st.caption("전세 매물은 월세를 비워 두세요. 가격 자체가 미확정이면 `가격 확인 필요`를 선택하세요.")
         else:
             st.info("가격은 저장하지 않고 ‘가격 확인 필요’로 기록합니다.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="relisting_management_fee_manwon")

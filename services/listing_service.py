@@ -14,7 +14,8 @@ from storage.listing_write_repository import close_current_listing, delete_listi
 
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
-ROOM_TYPES = ["원룸", "분리형 원룸", "투룸", "쓰리룸", "주인세대", "기타", "확인 필요"]
+UNKNOWN_BUILDING_NAME = "건물명 미입력"
+ROOM_TYPES = ["원룸", "분리형 원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
 AVAILABILITY_TYPES = ["즉시입주", "날짜 지정", "퇴실 후 협의", "확인 필요"]
 
 
@@ -33,7 +34,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     """화면의 입력값을 저장용 묶음으로 바꾸고, 오류를 쉬운 말로 돌려준다."""
     errors: list[str] = []
 
-    building_name = _clean_text(raw.get("building_name"))
+    building_name = _clean_text(raw.get("building_name")) or UNKNOWN_BUILDING_NAME
     lot_address = _clean_text(raw.get("lot_address"))
     unit_number = _clean_text(raw.get("unit_number"))
     deposit = raw.get("deposit_manwon")
@@ -41,16 +42,14 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     availability_type = raw.get("availability_type")
     available_from_date = raw.get("available_from_date")
 
-    if not building_name:
-        errors.append("건물명을 입력해 주세요.")
     if not lot_address:
         errors.append("지번을 입력해 주세요.")
     if not unit_number:
         errors.append("호수를 입력해 주세요.")
-    if deposit is None or deposit <= 0:
-        errors.append("보증금은 0보다 큰 숫자로 입력해 주세요. 가격을 모르면 확인 필요로 남겨 주세요.")
-    if rent is None or rent <= 0:
-        errors.append("월세는 0보다 큰 숫자로 입력해 주세요. 가격을 모르면 확인 필요로 남겨 주세요.")
+    if deposit is not None and deposit <= 0:
+        errors.append("보증금을 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
+    if rent is not None and rent <= 0:
+        errors.append("월세를 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
     if availability_type == "날짜 지정" and not available_from_date:
         errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
 
@@ -81,8 +80,8 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
         "listing": {
             "received_date": _date_text(raw.get("received_date")) or date.today().isoformat(),
             "listing_status": raw.get("listing_status"),
-            "deposit_manwon": int(deposit),
-            "monthly_rent_manwon": int(rent),
+            "deposit_manwon": int(deposit) if deposit is not None else None,
+            "monthly_rent_manwon": int(rent) if rent is not None else None,
             "management_fee_manwon": raw.get("management_fee_manwon"),
             "availability_type": availability_type,
             "available_from_date": _date_text(available_from_date),
@@ -146,10 +145,10 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
     if availability_type == "날짜 지정" and not available_from_date:
         errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
     if price_mode == "새 가격 입력":
-        if deposit is None or deposit <= 0:
-            errors.append("보증금은 0보다 큰 숫자로 입력해 주세요.")
-        if rent is None or rent <= 0:
-            errors.append("월세는 0보다 큰 숫자로 입력해 주세요.")
+        if deposit is not None and deposit <= 0:
+            errors.append("보증금을 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
+        if rent is not None and rent <= 0:
+            errors.append("월세를 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
     if errors:
         return None, errors
 
@@ -225,5 +224,5 @@ def listing_summary(payload: dict[str, dict[str, Any]]) -> str:
     return (
         f"{building['building_name']} · {building['lot_address']} · {unit_label} · "
         f"{unit.get('room_type') or '형태 미입력'} · "
-        f"{listing['deposit_manwon']}/{listing['monthly_rent_manwon']} · {availability}"
+        f"{listing['deposit_manwon'] if listing['deposit_manwon'] is not None else '-'}/{listing['monthly_rent_manwon'] if listing['monthly_rent_manwon'] is not None else '-'} · {availability}"
     )

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from storage.database import DATABASE_PATH, get_connection, require_database
+from storage.database import DATABASE_PATH, get_connection, normalize_unit_number, require_database
 
 
 def search_buildings(query: str, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
@@ -72,6 +72,28 @@ def update_unit_management_detail(unit_id: int, values: dict[str, Any], path: Pa
         with connection:
             if connection.execute("SELECT 1 FROM units WHERE id=? AND is_active=1", (unit_id,)).fetchone() is None: raise ValueError("수정할 호실을 찾을 수 없습니다.")
             connection.execute("""UPDATE units SET floor_number=COALESCE(?,floor_number), room_type=COALESCE(?,room_type), direction=COALESCE(?,direction), unit_options=COALESCE(?,unit_options), unit_highlights=COALESCE(?,unit_highlights), unit_cautions=COALESCE(?,unit_cautions), access_method=COALESCE(?,access_method), unit_access_password=CASE WHEN ? THEN NULL ELSE COALESCE(?,unit_access_password) END WHERE id=?""", (values.get("floor_number"),values.get("room_type"),values.get("direction"),values.get("unit_options"),values.get("unit_highlights"),values.get("unit_cautions"),values.get("access_method"),values.get("clear_unit_access_password",False),values.get("unit_access_password"),unit_id))
+    finally: connection.close()
+
+
+def rename_unit(unit_id: int, new_unit_number: str, path: Path = DATABASE_PATH) -> str:
+    """연결된 매물·계약·상담 이력은 유지한 채 호실 번호만 정정한다."""
+    display_number = str(new_unit_number or "").strip()
+    normalized = normalize_unit_number(display_number)
+    if not normalized:
+        raise ValueError("새 호실 번호를 입력해 주세요.")
+    connection = get_connection(path)
+    try:
+        with connection:
+            unit = connection.execute("SELECT building_id, unit_number, unit_number_normalized FROM units WHERE id=? AND is_active=1", (unit_id,)).fetchone()
+            if unit is None:
+                raise ValueError("정정할 호실을 찾을 수 없습니다.")
+            if unit["unit_number_normalized"] == normalized:
+                raise ValueError("현재 호실 번호와 같습니다.")
+            duplicate = connection.execute("SELECT 1 FROM units WHERE building_id=? AND unit_number_normalized=? AND id<>?", (unit["building_id"], normalized, unit_id)).fetchone()
+            if duplicate is not None:
+                raise ValueError("같은 건물에 이미 해당 호실 번호가 등록되어 있습니다.")
+            connection.execute("UPDATE units SET unit_number=?, unit_number_normalized=? WHERE id=?", (normalized, normalized, unit_id))
+            return unit["unit_number"]
     finally: connection.close()
 
 

@@ -65,8 +65,8 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
             availability = f"{item['available_from_date']} 입주"
         row = {
             "상태": item["listing_status"], "건물명": item["building_name"], "호수": item["unit_number"],
-            "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] or "확인 필요",
-            "월세": item["monthly_rent_manwon"] or "확인 필요", "관리비": item["management_fee_manwon"] or "-",
+            "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
+            "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
             "해야 할 일": ", ".join(item["tasks"]) or "-",
             "재확인일": item["next_check_date"] or "-", "메모": item["listing_note"] or "-",
@@ -82,7 +82,7 @@ def _render_quick_edit(selected: dict) -> None:
     st.markdown("#### 선택한 매물 빠른 수정")
     st.caption(
         f"{selected['building_name']} · {selected['lot_address']} · {selected['unit_number']}호 · "
-        f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] or '확인 필요'}/{selected['monthly_rent_manwon'] or '확인 필요'}"
+        f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] if selected['deposit_manwon'] is not None else '-'}/{selected['monthly_rent_manwon'] if selected['monthly_rent_manwon'] is not None else '-'}"
     )
     st.caption("확인·관리 상태만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
     left, middle, date_column = st.columns(3)
