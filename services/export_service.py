@@ -27,7 +27,6 @@ EXPORT_COLUMNS = [
     ("입주 가능", "availability_type", "text"),
     ("입주 가능일", "available_from_date", "date"),
     ("퇴실 예정일", "move_out_due_date", "date"),
-    ("사진 상태", "photo_status", "text"),
     ("사진 보유 여부", "has_listing_photos", "text"),
     ("재확인 예정일", "next_check_date", "date"),
     ("공동현관 비밀번호", "common_entrance_password", "text"),

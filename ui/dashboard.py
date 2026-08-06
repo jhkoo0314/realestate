@@ -15,16 +15,15 @@ from storage.database import (
 )
 
 
-PHOTO_STATUSES = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
-TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "현장 상태 확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
+TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "사진 확인 필요", "현장 상태 확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
 
 
 def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
-        "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_statuses", "dashboard_photo_availability", "dashboard_task",
+        "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_availability", "dashboard_task",
     ):
         st.session_state.pop(key, None)
     st.session_state["dashboard_has_searched"] = False
@@ -50,6 +49,14 @@ def _site_preparation_text(item: dict) -> str:
     return " · ".join(f"{label} {item.get(field) or '확인 필요'}" for label, field in labels)
 
 
+def _photo_availability_text(item: dict) -> str:
+    if item["has_listing_photos"] == "없음":
+        return "없음 · 사진 촬영 필요"
+    if item["has_listing_photos"] == "확인 필요":
+        return "확인 필요 · 사진 확인 필요"
+    return item["has_listing_photos"] or "확인 필요"
+
+
 def _display_rows(listings: list[dict]) -> list[dict]:
     rows = []
     for item in listings:
@@ -60,8 +67,7 @@ def _display_rows(listings: list[dict]) -> list[dict]:
             "상태": item["listing_status"], "건물명": item["building_name"], "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] or "확인 필요",
             "월세": item["monthly_rent_manwon"] or "확인 필요", "관리비": item["management_fee_manwon"] or "-",
-            "입주 가능": availability, "사진 상태": item["photo_status"] or "확인 필요",
-            "사진 보유": item["has_listing_photos"], "현장 준비": _site_preparation_text(item),
+            "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
             "해야 할 일": ", ".join(item["tasks"]) or "-",
             "재확인일": item["next_check_date"] or "-", "종료일": item["closed_date"] or "-",
             "종료 사유": item["close_reason"] or "-", "메모": item["listing_note"] or "-",
@@ -76,20 +82,13 @@ def _render_quick_edit(selected: dict) -> None:
         f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] or '확인 필요'}/{selected['monthly_rent_manwon'] or '확인 필요'}"
     )
     st.caption("확인·관리 상태만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
-    left, middle, right, date_column = st.columns(4)
+    left, middle, date_column = st.columns(3)
     with left:
         status_index = LISTING_STATUSES.index(selected["listing_status"]) if selected["listing_status"] in LISTING_STATUSES else 0
         status = st.selectbox("상태", LISTING_STATUSES, index=status_index, key=f"quick_status_{selected['listing_id']}")
     with middle:
-        photo_index = PHOTO_STATUSES.index(selected["photo_status"]) if selected["photo_status"] in PHOTO_STATUSES else 0
-        photo_status = st.selectbox("사진 상태", PHOTO_STATUSES, index=photo_index, key=f"quick_photo_status_{selected['listing_id']}")
-    with right:
-        if photo_status == "촬영 완료":
-            has_photo = "있음"
-            st.text_input("사진 보유 여부", value=has_photo, disabled=True, key=f"quick_has_photo_completed_{selected['listing_id']}", help="사진 촬영 완료를 선택하면 자동으로 ‘있음’으로 저장됩니다.")
-        else:
-            has_photo_index = PHOTO_AVAILABILITY.index(selected["has_listing_photos"]) if selected["has_listing_photos"] in PHOTO_AVAILABILITY else 2
-            has_photo = st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=has_photo_index, key=f"quick_has_photo_{selected['listing_id']}")
+        has_photo_index = PHOTO_AVAILABILITY.index(selected["has_listing_photos"]) if selected["has_listing_photos"] in PHOTO_AVAILABILITY else 2
+        has_photo = st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=has_photo_index, key=f"quick_has_photo_{selected['listing_id']}", help="없음이면 사진 촬영 필요, 확인 필요면 사진 확인 필요로 자동 표시됩니다.")
     with date_column:
         current_date = date.fromisoformat(selected["next_check_date"]) if selected["next_check_date"] else None
         next_check = st.date_input("재확인 예정일", value=current_date, key=f"quick_next_check_{selected['listing_id']}")
@@ -106,13 +105,13 @@ def _render_quick_edit(selected: dict) -> None:
         repair_status = st.selectbox("수리 상태", SITE_PREPARATION_STATUSES, index=repair_index, key=f"quick_repair_{selected['listing_id']}")
     if st.button("빠른 수정 저장", type="primary", key=f"quick_save_{selected['listing_id']}"):
         try:
-            saved_has_photo = "있음" if photo_status == "촬영 완료" else has_photo
-            update_listing_quick_fields(selected["listing_id"], status, photo_status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status)
+            saved_has_photo = has_photo
+            update_listing_quick_fields(selected["listing_id"], status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status)
         except Exception as error:
             st.error(f"수정하지 못했습니다. ({error})")
             return
         st.session_state["dashboard_quick_save_result"] = (
-            f"빠른 수정 저장 완료: 상태 {status} · 사진 {photo_status} · 사진 보유 {saved_has_photo} · "
+            f"빠른 수정 저장 완료: 상태 {status} · 사진 보유 {saved_has_photo} · "
             f"청소 {cleaning_status} · 도배 {wallpaper_status} · 수리 {repair_status} · "
             f"재확인일 {_date_text(next_check) or '미지정'}"
         )
@@ -207,7 +206,7 @@ def render_dashboard(go_to_listing) -> None:
         st.markdown("<div class='empty-panel'><h2>현재 운영 중인 매물이 없습니다</h2><p>새 매물을 등록하거나, 아래 필터에서 종료된 매물을 조회해 주세요.</p></div>", unsafe_allow_html=True)
         _, button_column, _ = st.columns([3, 2, 3])
         with button_column:
-            st.button("현재 운영할 첫 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
+            st.button("현재 운영할 첫 매물 등록", type="primary", width="stretch", on_click=go_to_listing)
 
     st.markdown("#### 검색·필터")
     with st.form("dashboard_search_form"):
@@ -218,7 +217,7 @@ def render_dashboard(go_to_listing) -> None:
             received_start = st.date_input("접수일 시작", value=None, key="dashboard_received_start")
         with date_end_column:
             received_end = st.date_input("접수일 종료", value=None, key="dashboard_received_end")
-        filter_columns = st.columns(5)
+        filter_columns = st.columns(4)
         with filter_columns[0]:
             listing_scope = st.selectbox("표시할 매물", ["현재 매물만", "종료된 매물만", "전체"], key="dashboard_listing_scope")
         with filter_columns[1]:
@@ -226,8 +225,6 @@ def render_dashboard(go_to_listing) -> None:
         with filter_columns[2]:
             room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
         with filter_columns[3]:
-            photo_statuses = st.multiselect("사진 상태", PHOTO_STATUSES, key="dashboard_photo_statuses")
-        with filter_columns[4]:
             photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
         task_filter = st.selectbox("확인 업무", ["전체"] + TASK_FILTERS, key="dashboard_task")
         searched = st.form_submit_button("조회", type="primary")
@@ -253,7 +250,6 @@ def render_dashboard(go_to_listing) -> None:
         received_end=_date_text(received_end),
         statuses=statuses,
         room_types=room_types,
-        photo_statuses=photo_statuses,
         photo_availability=photo_availability,
         task_filter=None if task_filter == "전체" else task_filter,
         listing_scope=listing_scope,
@@ -264,7 +260,7 @@ def render_dashboard(go_to_listing) -> None:
         if listing_scope == "현재 매물만":
             _render_excel_export(all_listings, listings, received_start, received_end)
         return
-    st.dataframe(_display_rows(listings), use_container_width=True, hide_index=True)
+    st.dataframe(_display_rows(listings), width="stretch", hide_index=True)
     if listing_scope == "현재 매물만":
         _render_excel_export(all_listings, listings, received_start, received_end)
 

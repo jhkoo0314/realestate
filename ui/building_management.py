@@ -46,7 +46,7 @@ def _render_search() -> dict | None:
         query = st.text_input("건물명·지번 검색", key="building_management_search", placeholder="예: 아델리오 또는 북수리 1404")
     with reset_column:
         st.markdown("<div style='height: 1.75rem'></div>", unsafe_allow_html=True)
-        if st.button("검색 초기화", key="building_management_reset", use_container_width=True):
+        if st.button("검색 초기화", key="building_management_reset", width="stretch"):
             _clear_selection()
             st.rerun()
 
@@ -63,7 +63,7 @@ def _render_search() -> dict | None:
     st.caption("관리할 건물을 선택해 주세요.")
     for building in results:
         label = f"{building['building_name']} · {building['lot_address']} · 호실 {building['unit_count']}개"
-        if st.button(label, key=f"manage_building_{building['id']}", use_container_width=True):
+        if st.button(label, key=f"manage_building_{building['id']}", width="stretch"):
             st.session_state["building_management_selected"] = building
             st.rerun()
     return None
@@ -184,7 +184,7 @@ def _render_unit_detail(unit_id: int) -> None:
             "종료일": item["closed_date"] or "-", "종료 사유": item["close_reason"] or "-",
             "이번 매물 옵션 변경": item["option_change_note"] or "-",
         } for item in history]
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
     else:
         st.info("등록된 매물 이력이 없습니다.")
 
@@ -196,7 +196,7 @@ def _render_unit_detail(unit_id: int) -> None:
             "시작일": item["contract_start_date"], "종료일": item["contract_end_date"] or "-",
             "기간(개월)": item["term_months"] or "-", "계약 상태": item["contract_status"],
             "메모": item["contract_note"] or "-",
-        } for item in contracts], use_container_width=True, hide_index=True)
+        } for item in contracts], width="stretch", hide_index=True)
     else:
         st.info("등록된 계약 이력이 없습니다. 계약 등록과 상태 변경은 계약관리 탭에서 합니다.")
 
@@ -239,12 +239,12 @@ def render_building_management() -> None:
         "호실": item["unit_number"], "룸 형태": item["room_type"] or "미입력", "방향": item["direction"] or "미입력",
         "최근 조건": f"{item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}",
         "최근 상태": item["listing_status"] or "-", "마지막 접수일": item["received_date"] or "-",
-    } for item in units], use_container_width=True, hide_index=True)
+    } for item in units], width="stretch", hide_index=True)
     unit_columns = st.columns(min(len(units), 4))
     for index, unit in enumerate(units):
         with unit_columns[index % len(unit_columns)]:
             unit_label = unit["unit_number"] if unit["unit_number"].endswith("호") else f"{unit['unit_number']}호"
-            if st.button(f"{unit_label} 관리", key=f"manage_unit_{unit['id']}", use_container_width=True):
+            if st.button(f"{unit_label} 관리", key=f"manage_unit_{unit['id']}", width="stretch"):
                 st.session_state["building_management_unit_id"] = unit["id"]
                 st.rerun()
     if unit_id := st.session_state.get("building_management_unit_id"):

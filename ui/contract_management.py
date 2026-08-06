@@ -110,7 +110,7 @@ def _render_contract_lookup() -> None:
             st.caption(f"계약 만료 30일 전 필터 적용: {date.today().isoformat()} ~ {deadline.isoformat()} · 해지·만료 계약 제외")
         st.caption(f"조회된 계약 {len(contracts)}건")
         if contracts:
-            st.dataframe(_contract_rows(contracts), use_container_width=True, hide_index=True)
+            st.dataframe(_contract_rows(contracts), width="stretch", hide_index=True)
         else:
             st.info("조건에 맞는 계약 기록이 없습니다.")
     _render_status_change(contracts)
@@ -131,7 +131,7 @@ def _render_contract_registration() -> None:
             else:
                 st.caption("계약을 연결할 매물 기록을 선택해 주세요. 같은 호실도 접수일이 다르면 다른 기록입니다.")
                 for item in listing_results:
-                    if st.button(_listing_label(item), key=f"contract_listing_{item['listing_id']}", use_container_width=True):
+                    if st.button(_listing_label(item), key=f"contract_listing_{item['listing_id']}", width="stretch"):
                         st.session_state["contract_selected_listing"] = item
                         st.rerun()
     else:

@@ -84,7 +84,7 @@ def _render_registration() -> None:
             st.info("조건에 맞는 매물 기록이 없습니다.")
             return
         for item in results:
-            if st.button(_listing_label(item), key=f"consultation_listing_{item['listing_id']}", use_container_width=True):
+            if st.button(_listing_label(item), key=f"consultation_listing_{item['listing_id']}", width="stretch"):
                 st.session_state["consultation_selected_listing"] = item
                 st.rerun()
         return
@@ -142,7 +142,7 @@ def _render_lookup() -> None:
     if not items:
         st.info("조건에 맞는 상담 기록이 없습니다.")
         return
-    st.dataframe(_rows(items), use_container_width=True, hide_index=True)
+    st.dataframe(_rows(items), width="stretch", hide_index=True)
     labels = [f"{_listing_label(item)} · 상담일 {item['consulted_date']} · 상담 #{item['consultation_id']}" for item in items]
     chosen = st.selectbox("상세·수정할 상담", labels, key="consultation_target")
     detail = get_consultation_detail(items[labels.index(chosen)]["consultation_id"])
@@ -202,7 +202,7 @@ def _render_lookup() -> None:
                 if not results:
                     st.info("조건에 맞는 매물 기록이 없습니다.")
                 for item in results:
-                    if st.button(_listing_label(item), key=f"link_consultation_{detail['consultation_id']}_{item['listing_id']}", use_container_width=True):
+                    if st.button(_listing_label(item), key=f"link_consultation_{detail['consultation_id']}_{item['listing_id']}", width="stretch"):
                         try:
                             link_consultation_to_listing(detail["consultation_id"], item["listing_id"])
                         except ValueError as error:

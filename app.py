@@ -50,7 +50,7 @@ def main() -> None:
         st.markdown("<p class='app-title'>🏠 매물관리</p><p class='app-subtitle'>사무실 내부용 · 원룸·투룸 매물 관리</p>", unsafe_allow_html=True)
     with action_column:
         if st.session_state.selected_page != PAGE_BUILDINGS:
-            st.button("＋ 새 매물 등록", type="primary", use_container_width=True, on_click=go_to_listing)
+            st.button("＋ 새 매물 등록", type="primary", width="stretch", on_click=go_to_listing)
 
     st.radio("주요 메뉴", PAGES, horizontal=True, key="selected_page", label_visibility="collapsed")
     st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 매물 현황 리스트에서 조회·필터와 확인 업무를 처리할 수 있습니다.</div>", unsafe_allow_html=True)

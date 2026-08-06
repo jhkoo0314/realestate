@@ -24,16 +24,16 @@
 
 구현 전과 기능 변경 전에는 아래 문서를 확인한다.
 
-| 문서 | 사용 목적 |
-|---|---|
-| `docs/TASK.md` | 현재 구현 순서, 단계별 테스트, 완료 기록 |
-| `docs/real_estate_listing_prd_v1.md` | 제품 목적, 범위, 핵심 기능 |
-| `docs/real_estate_data_dictionary_v1.md` | 어떤 정보를 어디에 저장할지 |
-| `docs/real_estate_listing_workflow_spec_v1.md` | 신규 등록·재등록·수정의 업무 흐름 |
-| `docs/real_estate_screen_spec_wireframe_v1.md` | 화면 구성과 사용성 기준 |
-| `docs/real_estate_test_acceptance_v1.md` | 통과해야 할 테스트 시나리오 |
-| `docs/real_estate_operations_backup_handover_v1.md` | 운영, 백업, 복구, 인수인계 기준 |
-| `docs/tailscale_main_pc_connection_plan.md` | 메인 PC의 Tailscale Serve 연결 순서와 접근 제한 기준 |
+| 문서                                                | 사용 목적                                            |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `docs/TASK.md`                                      | 현재 구현 순서, 단계별 테스트, 완료 기록             |
+| `docs/real_estate_listing_prd_v1.md`                | 제품 목적, 범위, 핵심 기능                           |
+| `docs/real_estate_data_dictionary_v1.md`            | 어떤 정보를 어디에 저장할지                          |
+| `docs/real_estate_listing_workflow_spec_v1.md`      | 신규 등록·재등록·수정의 업무 흐름                    |
+| `docs/real_estate_screen_spec_wireframe_v1.md`      | 화면 구성과 사용성 기준                              |
+| `docs/real_estate_test_acceptance_v1.md`            | 통과해야 할 테스트 시나리오                          |
+| `docs/real_estate_operations_backup_handover_v1.md` | 운영, 백업, 복구, 인수인계 기준                      |
+| `docs/tailscale_main_pc_connection_plan.md`         | 메인 PC의 Tailscale Serve 연결 순서와 접근 제한 기준 |
 
 문서끼리 내용이 다르게 해석될 때는 다음 순서로 판단한다.
 
@@ -127,16 +127,16 @@
 - 화면에서 받은 입력을 검사하고 저장 순서를 정하는 코드는 `services/` 폴더의 기능별 파일에 둔다.
 - 화면별 권장 분리 예시는 다음과 같다.
 
-| 역할 | 권장 파일 | 하는 일 |
-|---|---|---|
-| 프로그램 입구 | `app.py` | 메뉴, 공통 모양, 화면 전환 |
-| 등록·수정 화면 | `ui/listing_form.py` | 사용자에게 입력칸을 보여 줌 |
-| 등록·수정 규칙 | `services/listing_service.py` | 입력 검사, 저장 순서, 오류 문구 결정 |
-| 오늘의 현황 | `ui/dashboard.py` | 목록·필터·오늘 할 일 화면 |
-| 건물·호실 관리 | `ui/building_management.py` | 고정정보와 이력 화면 |
-| 계약·상담 관리 | `ui/contract_management.py`, `ui/consultation_management.py` | 매물 회차별 계약·상담 기록 관리 |
-| 데이터 저장 | `storage/database.py`, `storage/*_repository.py` | 공통 연결·표 구조와 업무별 읽기·저장 |
-| 공통 선택값·검사 | 필요 시 별도 파일 | 상태값, 선택 목록, 공통 검사 |
+| 역할             | 권장 파일                                                    | 하는 일                              |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------ |
+| 프로그램 입구    | `app.py`                                                     | 메뉴, 공통 모양, 화면 전환           |
+| 등록·수정 화면   | `ui/listing_form.py`                                         | 사용자에게 입력칸을 보여 줌          |
+| 등록·수정 규칙   | `services/listing_service.py`                                | 입력 검사, 저장 순서, 오류 문구 결정 |
+| 오늘의 현황      | `ui/dashboard.py`                                            | 목록·필터·오늘 할 일 화면            |
+| 건물·호실 관리   | `ui/building_management.py`                                  | 고정정보와 이력 화면                 |
+| 계약·상담 관리   | `ui/contract_management.py`, `ui/consultation_management.py` | 매물 회차별 계약·상담 기록 관리      |
+| 데이터 저장      | `storage/database.py`, `storage/*_repository.py`             | 공통 연결·표 구조와 업무별 읽기·저장 |
+| 공통 선택값·검사 | 필요 시 별도 파일                                            | 상태값, 선택 목록, 공통 검사         |
 
 - 파일을 나누는 목적은 복잡하게 보이게 하는 것이 아니라, 한 기능을 고쳐도 다른 기능이 망가지지 않게 하는 것이다.
 - 기능이 아직 없으면 빈 기능 파일을 미리 만들지 않는다. 해당 단계에서 실제 기능을 만들 때 역할에 맞는 폴더에 추가한다.
@@ -158,8 +158,9 @@
    - 첫 화면으로 사용한다.
    - 오늘 새 접수, 퇴실 예정, 재확인 필요, 사진 촬영 필요, 공실을 간단히 보여 준다.
    - 건물명·지번·호수 검색과 상태·룸 형태·사진·확인 업무 필터를 제공한다.
-  - 기본 표에서 상태, 건물명, 호수, 룸 형태, 보증금, 월세, 관리비, 입주 가능, 사진 상태, 사진 보유 여부, 재확인일, 메모를 우선 보인다.
-   - 행 선택 시 같은 화면 아래에서 상세를 펼친다.
+
+- 기본 표에서 상태, 건물명, 호수, 룸 형태, 보증금, 월세, 관리비, 입주 가능, 사진 상태, 사진 보유 여부, 재확인일, 메모를 우선 보인다.
+- 행 선택 시 같은 화면 아래에서 상세를 펼친다.
 
 2. **매물 등록·수정**
    - 건물 검색 → 호실 선택 → 이번 매물 입력 → 저장 순서를 유지한다.
@@ -277,7 +278,6 @@
 
 ## 11. 절대 하지 않을 일
 
-- 기존 `구재현` 시트를 자동으로 시스템에 일괄 반영
 - 과거 매물 회차의 가격·상태·입주일을 재등록 때문에 덮어쓰기
 - 모르는 가격을 0으로 저장
 - 매물이 보이지 않는다는 이유만으로 계약 완료 처리

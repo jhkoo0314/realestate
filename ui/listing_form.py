@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 import streamlit as st
 
@@ -32,12 +33,11 @@ INPUT_KEYS = [
     "room_type", "direction", "access_method", "unit_access_password",
     "unit_highlights", "unit_options", "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
-    "photo_status", "has_listing_photos", "cleaning_status", "wallpaper_status", "repair_status",
+    "has_listing_photos", "cleaning_status", "wallpaper_status", "repair_status",
     "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
 UNIT_OPTION_LABELS = ["냉장고", "세탁기", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
-PHOTO_STATUSES = ["확인 필요", "촬영 필요", "촬영 완료", "기존 사진 사용"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 
@@ -106,18 +106,38 @@ def _status_index(options: list[str], value: str | None) -> int:
     return options.index(value) if value in options else 0
 
 
+def _format_phone_number(value: str) -> str:
+    """숫자로 된 국내 전화번호를 입력 중에도 읽기 쉬운 형태로 표시한다."""
+    if not value or not re.fullmatch(r"[\d\s()-]+", value):
+        return value
+    digits = re.sub(r"\D", "", value)
+    if digits.startswith("02"):
+        if len(digits) <= 2:
+            return digits
+        if len(digits) <= 6:
+            return f"02-{digits[2:]}"
+        return f"02-{digits[2:-4]}-{digits[-4:]}"
+    if len(digits) <= 3:
+        return digits
+    if len(digits) <= 7:
+        return f"{digits[:3]}-{digits[3:]}"
+    if len(digits) == 10:
+        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+    return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+
+
+def _format_phone_input(key: str) -> None:
+    st.session_state[key] = _format_phone_number(str(st.session_state.get(key, "")))
+
+
 def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
     """현황 리스트의 자동 업무 계산에 쓰는 관리 상태를 같은 이름으로 입력한다."""
     values = values or {}
-    photo_status = st.session_state.get(f"{key_prefix}_photo_status", values.get("photo_status"))
     st.markdown("##### 확인·관리 사항")
-    st.caption("아래 상태를 저장하면 현황리스트의 ‘해야 할 일’이 자동으로 표시됩니다. 할 일을 따로 입력하지 않습니다.")
+    st.caption("사진 보유 여부와 아래 상태를 저장하면 현황리스트의 ‘해야 할 일’이 자동으로 표시됩니다. 할 일을 따로 입력하지 않습니다.")
     left, middle, right = st.columns(3)
     with left:
-        if photo_status == "촬영 완료":
-            st.text_input("사진 보유 여부", value="있음", disabled=True, help="사진 촬영 완료를 선택하면 자동으로 ‘있음’으로 저장됩니다.")
-        else:
-            st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=_status_index(PHOTO_AVAILABILITY, values.get("has_listing_photos")), key=f"{key_prefix}_has_listing_photos")
+        st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=_status_index(PHOTO_AVAILABILITY, values.get("has_listing_photos")), key=f"{key_prefix}_has_listing_photos", help="없음이면 사진 촬영 필요, 확인 필요면 사진 확인 필요로 자동 표시됩니다.")
         st.selectbox("청소 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("cleaning_status")), key=f"{key_prefix}_cleaning_status")
     with middle:
         st.selectbox("도배 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("wallpaper_status")), key=f"{key_prefix}_wallpaper_status")
@@ -180,14 +200,14 @@ def _render_building_search() -> dict | None:
         query = st.text_input("건물명·지번 검색", key="registration_building_search", placeholder="예: 대성빌 또는 북수리 1026")
     with reset_column:
         st.markdown("<div style='height: 1.75rem'></div>", unsafe_allow_html=True)
-        if st.button("검색 초기화", use_container_width=True):
+        if st.button("검색 초기화", width="stretch"):
             reset_for_new_listing()
             st.rerun()
     selected = _selected_building()
 
     if selected:
         st.success(f"선택한 기존 건물: {selected['building_name']} · {selected['lot_address']}")
-        if st.button("다른 건물 찾기 또는 새 건물 등록", use_container_width=True):
+        if st.button("다른 건물 찾기 또는 새 건물 등록", width="stretch"):
             _clear_selected_building()
             st.rerun()
         return selected
@@ -198,7 +218,7 @@ def _render_building_search() -> dict | None:
             st.info("같은 건물을 새로 만들지 않도록, 아래 결과에서 먼저 선택해 주세요.")
             for building in results:
                 label = f"{building['building_name']} · {building['lot_address']} · 등록 호실 {building['unit_count']}개"
-                if st.button(label, key=f"select_building_{building['id']}", use_container_width=True):
+                if st.button(label, key=f"select_building_{building['id']}", width="stretch"):
                     _select_building(building)
                     st.rerun()
         else:
@@ -234,14 +254,14 @@ def _render_existing_building_summary(building: dict) -> None:
                 "최근 조건": f"{row['deposit_manwon'] or '확인 필요'}/{row['monthly_rent_manwon'] or '확인 필요'}",
                 "최근 상태": row["listing_status"] or "-", "마지막 접수일": row["received_date"] or "-",
             } for row in units],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
         st.caption("같은 호실이 다시 매물로 나왔다면 아래에서 선택하세요. 이번 매물 입력칸이 바로 열립니다.")
         unit_columns = st.columns(min(len(units), 4))
         for index, unit in enumerate(units):
             with unit_columns[index % len(unit_columns)]:
-                if st.button(f"{unit['unit_number']} 최신 정보 수정", key=f"relist_unit_{unit['id']}", use_container_width=True):
+                if st.button(f"{unit['unit_number']} 최신 정보 수정", key=f"relist_unit_{unit['id']}", width="stretch"):
                     _select_unit_for_relisting(unit["id"])
                     st.rerun()
     st.info("새 호실을 등록합니다. 주소·공동현관·엘리베이터·주차 정보는 다시 입력하지 않습니다.")
@@ -288,7 +308,6 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     with listing_right:
         st.date_input("매물 접수일", value=date.today(), key="registration_received_date", help="기본값은 오늘입니다. 실제 접수일이 다르면 바꿔 주세요.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="registration_management_fee_manwon")
-        st.selectbox("사진 상태", PHOTO_STATUSES, key="registration_photo_status")
 
     if _field_value("availability_type") == "날짜 지정":
         st.date_input("입주 가능일 *", value=None, key="registration_available_from_date")
@@ -298,9 +317,9 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
         with contact_left:
-            st.text_input("임대인 연락처", key="registration_landlord_contact", placeholder="예: 010-1234-5678")
+            st.text_input("임대인 연락처", key="registration_landlord_contact", placeholder="예: 010-1234-5678", on_change=_format_phone_input, args=("registration_landlord_contact",))
         with contact_right:
-            st.text_input("세입자 연락처", key="registration_tenant_contact", placeholder="예: 010-1234-5678")
+            st.text_input("세입자 연락처", key="registration_tenant_contact", placeholder="예: 010-1234-5678", on_change=_format_phone_input, args=("registration_tenant_contact",))
         st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
     return duplicate_unit
 
@@ -314,7 +333,7 @@ def _show_confirmation(pending: dict) -> None:
     st.caption("비밀번호와 내부 메모는 이 요약에 표시하지 않습니다.")
     save_column, edit_column = st.columns(2)
     with save_column:
-        if st.button(button_label, type="primary", use_container_width=True):
+        if st.button(button_label, type="primary", width="stretch"):
             try:
                 if building_id:
                     save_confirmed_existing_building_listing(building_id, payload)
@@ -330,7 +349,7 @@ def _show_confirmation(pending: dict) -> None:
             st.session_state["registration_success"] = f"{building_name} {unit_number}호가 등록되었습니다."
             st.rerun()
     with edit_column:
-        if st.button("입력 계속하기", use_container_width=True):
+        if st.button("입력 계속하기", width="stretch"):
             st.session_state.pop("pending_registration", None)
             st.rerun()
 
@@ -387,13 +406,10 @@ def _render_current_listing_edit(unit_id: int) -> None:
         availability_index = AVAILABILITY_TYPES.index(listing["availability_type"]) if listing["availability_type"] in AVAILABILITY_TYPES else 0
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, index=availability_index, key="edit_availability_type")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=listing["management_fee_manwon"], key="edit_management_fee_manwon")
-        st.selectbox("사진 상태", PHOTO_STATUSES, index=_status_index(PHOTO_STATUSES, listing["photo_status"]), key="edit_photo_status")
     with right:
         if st.session_state.get("edit_availability_type", listing["availability_type"]) == "날짜 지정":
             st.date_input("입주 가능일 *", value=_date_value(listing["available_from_date"]), key="edit_available_from_date")
         st.date_input("퇴실 예정일", value=_date_value(listing["move_out_due_date"]), key="edit_move_out_due_date")
-        if st.session_state.get("edit_photo_status", listing["photo_status"]) == "촬영 완료":
-            st.date_input("사진 촬영일", value=date.today(), key="edit_last_photo_date")
     _render_management_fields("edit", listing)
     st.text_area("이번 매물 메모", value=listing["listing_note"] or "", key="edit_listing_note")
     st.markdown("##### 호실 옵션")
@@ -401,9 +417,9 @@ def _render_current_listing_edit(unit_id: int) -> None:
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
         with contact_left:
-            st.text_input("임대인 연락처", value=listing["landlord_contact"] or "", key="edit_landlord_contact")
+            st.text_input("임대인 연락처", value=listing["landlord_contact"] or "", key="edit_landlord_contact", on_change=_format_phone_input, args=("edit_landlord_contact",))
         with contact_right:
-            st.text_input("세입자 연락처", value=listing["tenant_contact"] or "", key="edit_tenant_contact")
+            st.text_input("세입자 연락처", value=listing["tenant_contact"] or "", key="edit_tenant_contact", on_change=_format_phone_input, args=("edit_tenant_contact",))
         st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
     if st.button("최신 정보 저장", type="primary"):
@@ -415,12 +431,10 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "availability_type": st.session_state.get("edit_availability_type"),
             "available_from_date": st.session_state.get("edit_available_from_date"),
             "move_out_due_date": st.session_state.get("edit_move_out_due_date"),
-            "photo_status": st.session_state.get("edit_photo_status"),
             "has_listing_photos": st.session_state.get("edit_has_listing_photos"),
             "cleaning_status": st.session_state.get("edit_cleaning_status"),
             "wallpaper_status": st.session_state.get("edit_wallpaper_status"),
             "repair_status": st.session_state.get("edit_repair_status"),
-            "last_photo_date": st.session_state.get("edit_last_photo_date"),
             "next_check_date": st.session_state.get("edit_next_check_date"),
             "listing_note": st.session_state.get("edit_listing_note"),
             "landlord_contact": st.session_state.get("edit_landlord_contact"),
@@ -521,7 +535,6 @@ def _render_relisting_form(unit_id: int) -> None:
     with right:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="relisting_availability_type")
         st.date_input("매물 접수일", value=date.today(), key="relisting_received_date")
-        st.selectbox("사진 상태", PHOTO_STATUSES, key="relisting_photo_status")
     if st.session_state.get("relisting_availability_type") == "날짜 지정":
         st.date_input("입주 가능일 *", value=None, key="relisting_available_from_date")
     st.date_input("퇴실 예정일", value=None, key="relisting_move_out_due_date")
@@ -530,9 +543,9 @@ def _render_relisting_form(unit_id: int) -> None:
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
         with contact_left:
-            st.text_input("임대인 연락처", key="relisting_landlord_contact", placeholder="예: 010-1234-5678")
+            st.text_input("임대인 연락처", key="relisting_landlord_contact", placeholder="예: 010-1234-5678", on_change=_format_phone_input, args=("relisting_landlord_contact",))
         with contact_right:
-            st.text_input("세입자 연락처", key="relisting_tenant_contact", placeholder="예: 010-1234-5678")
+            st.text_input("세입자 연락처", key="relisting_tenant_contact", placeholder="예: 010-1234-5678", on_change=_format_phone_input, args=("relisting_tenant_contact",))
         st.caption("기본 매물 목록과 엑셀 파일에는 포함하지 않습니다.")
 
     if st.button("현재 매물 등록", type="primary"):
@@ -546,7 +559,6 @@ def _render_relisting_form(unit_id: int) -> None:
             "available_from_date": st.session_state.get("relisting_available_from_date"),
             "received_date": st.session_state.get("relisting_received_date"),
             "move_out_due_date": st.session_state.get("relisting_move_out_due_date"),
-            "photo_status": st.session_state.get("relisting_photo_status"),
             "has_listing_photos": st.session_state.get("relisting_has_listing_photos"),
             "cleaning_status": st.session_state.get("relisting_cleaning_status"),
             "wallpaper_status": st.session_state.get("relisting_wallpaper_status"),
