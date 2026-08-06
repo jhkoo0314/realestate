@@ -6,6 +6,7 @@ from datetime import date
 from typing import Any
 
 from storage.contract_repository import create_contract, delete_contract as delete_contract_record, update_contract_details, update_contract_status
+from services.backup_service import create_daily_backup
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
@@ -75,13 +76,16 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
 
 
 def save_contract(listing_id: int, contract: dict[str, Any]) -> int:
-    return create_contract(listing_id, contract)
+    result = create_contract(listing_id, contract)
+    create_daily_backup()
+    return result
 
 
 def change_contract_status(contract_id: int, contract_status: str) -> None:
     if contract_status not in CONTRACT_STATUSES:
         raise ValueError("계약 상태를 선택해 주세요.")
     update_contract_status(contract_id, contract_status)
+    create_daily_backup()
 
 
 def change_contract_details(contract_id: int, values: dict[str, Any]) -> None:
@@ -90,8 +94,10 @@ def change_contract_details(contract_id: int, values: dict[str, Any]) -> None:
     if errors:
         raise ValueError(" ".join(errors))
     update_contract_details(contract_id, contract)
+    create_daily_backup()
 
 
 def delete_contract(contract_id: int) -> None:
     """선택한 계약 기록을 완전히 삭제한다."""
     delete_contract_record(contract_id)
+    create_daily_backup()

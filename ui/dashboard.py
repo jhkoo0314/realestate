@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.listing_service import LISTING_STATUSES, ROOM_TYPES, delete_listing
+from services.backup_service import create_daily_backup
 from services.export_service import create_current_listing_excel, make_export_filename
 from storage.export_repository import get_current_listing_export_rows
 from storage.listing_repository import get_current_listings, update_listing_quick_fields
@@ -110,6 +111,7 @@ def _render_quick_edit(selected: dict) -> None:
         try:
             saved_has_photo = has_photo
             update_listing_quick_fields(selected["listing_id"], status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status)
+            create_daily_backup()
         except Exception as error:
             st.error(f"수정하지 못했습니다. ({error})")
             return

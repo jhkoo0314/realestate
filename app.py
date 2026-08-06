@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+from services.backup_service import get_backup_status
 from ui.building_management import render_building_management
 from ui.contract_management import render_contract_management
 from ui.consultation_management import render_consultation_management
@@ -40,6 +41,18 @@ def apply_styles() -> None:
     </style>""", unsafe_allow_html=True)
 
 
+def render_backup_status() -> None:
+    status = get_backup_status()
+    if not status:
+        st.caption("백업 상태: 아직 자동 백업 기록이 없습니다.")
+        return
+    if status.get("success"):
+        size = status.get("backup_size", 0)
+        st.caption(f"백업 상태: {status.get('completed_at', status['recorded_at'])} · 완료 · {size:,}바이트")
+    else:
+        st.warning(f"저장은 완료됐지만 자동 백업에 실패했습니다. {status.get('message', '백업 상태를 확인해 주세요.')}")
+
+
 def main() -> None:
     apply_styles()
     if "selected_page" not in st.session_state:
@@ -54,6 +67,7 @@ def main() -> None:
 
     st.radio("주요 메뉴", PAGES, horizontal=True, key="selected_page", label_visibility="collapsed")
     st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 매물 현황 리스트에서 조회·필터와 확인 업무를 처리할 수 있습니다.</div>", unsafe_allow_html=True)
+    render_backup_status()
 
     if st.session_state.selected_page == PAGE_DASHBOARD:
         render_dashboard(go_to_listing)

@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.listing_service import ROOM_TYPES
+from services.backup_service import create_daily_backup
 from storage.building_repository import (
     get_building_management_detail,
     get_building_password,
@@ -109,6 +110,7 @@ def _render_building_edit(building: dict) -> None:
                 "common_entrance_password": new_password.strip() if password_action == "새 비밀번호로 변경" else None,
                 "clear_common_entrance_password": password_action == "비밀번호 삭제",
             })
+            create_daily_backup()
             st.success("건물 기본정보를 저장했습니다.")
             st.rerun()
 
@@ -161,6 +163,7 @@ def _render_unit_detail(unit_id: int) -> None:
                 "unit_access_password": new_password.strip() if password_action == "새 비밀번호로 변경" else None,
                 "clear_unit_access_password": password_action == "비밀번호 삭제",
             })
+            create_daily_backup()
             st.success("호실 기본정보를 저장했습니다.")
             st.rerun()
 
@@ -174,6 +177,7 @@ def _render_unit_detail(unit_id: int) -> None:
             except ValueError as error:
                 st.error(str(error))
             else:
+                create_daily_backup()
                 st.success(f"{old_unit_number}호를 {new_unit_number.strip().removesuffix('호')}호로 정정했습니다. 연결된 이력은 유지됩니다.")
                 st.rerun()
 
@@ -186,6 +190,7 @@ def _render_unit_detail(unit_id: int) -> None:
             except ValueError as error:
                 st.info(str(error))
             else:
+                create_daily_backup()
                 st.success("이번 매물에만 옵션 변경 메모를 저장했습니다.")
 
     history = get_unit_listing_history(unit_id)

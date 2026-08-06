@@ -11,6 +11,7 @@ from storage.listing_create_repository import (
     save_first_listing_for_existing_building,
 )
 from storage.listing_write_repository import close_current_listing, delete_listing as delete_listing_record, save_new_listing_round, update_current_listing
+from services.backup_service import create_daily_backup
 
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
@@ -118,14 +119,18 @@ def validate_new_building_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[s
 
 def save_confirmed_first_listing(payload: dict[str, dict[str, Any]]) -> tuple[int, int, int]:
     """확인된 입력만 데이터 저장소에 전달한다."""
-    return save_first_listing(payload["building"], payload["unit"], payload["listing"])
+    result = save_first_listing(payload["building"], payload["unit"], payload["listing"])
+    create_daily_backup()
+    return result
 
 
 def save_confirmed_existing_building_listing(
     building_id: int, payload: dict[str, dict[str, Any]]
 ) -> tuple[int, int]:
     """선택한 기존 건물에 새 호실과 첫 매물을 저장한다."""
-    return save_first_listing_for_existing_building(building_id, payload["unit"], payload["listing"])
+    result = save_first_listing_for_existing_building(building_id, payload["unit"], payload["listing"])
+    create_daily_backup()
+    return result
 
 
 def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -183,7 +188,9 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
 
 def save_current_listing_for_existing_unit(unit_id: int, listing: dict[str, Any]) -> int:
     """현재 매물 기록이 없는 기존 호실에 현재 매물 1건을 등록한다."""
-    return save_new_listing_round(unit_id, listing)
+    result = save_new_listing_round(unit_id, listing)
+    create_daily_backup()
+    return result
 
 
 def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -200,16 +207,20 @@ def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None
 def save_current_listing_changes(listing_id: int, listing: dict[str, Any]) -> None:
     """검사된 수정값을 현재 매물 회차에 한 번에 저장한다."""
     update_current_listing(listing_id, listing)
+    create_daily_backup()
 
 
 def close_listing(listing_id: int, close_date: date, close_reason: str) -> None:
     """현재 매물을 종료 처리하고 기록은 남긴다."""
     close_current_listing(listing_id, close_date.isoformat(), close_reason)
+    create_daily_backup()
 
 
 def delete_listing(listing_id: int) -> dict[str, int]:
     """매물과 그 매물에 연결된 계약·상담 기록을 완전히 삭제한다."""
-    return delete_listing_record(listing_id)
+    result = delete_listing_record(listing_id)
+    create_daily_backup()
+    return result
 
 
 def listing_summary(payload: dict[str, dict[str, Any]]) -> str:
