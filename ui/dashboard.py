@@ -57,21 +57,24 @@ def _photo_availability_text(item: dict) -> str:
     return item["has_listing_photos"] or "확인 필요"
 
 
-def _display_rows(listings: list[dict]) -> list[dict]:
+def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[dict]:
     rows = []
     for item in listings:
         availability = item["availability_type"]
         if availability == "날짜 지정" and item["available_from_date"]:
             availability = f"{item['available_from_date']} 입주"
-        rows.append({
+        row = {
             "상태": item["listing_status"], "건물명": item["building_name"], "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] or "확인 필요",
             "월세": item["monthly_rent_manwon"] or "확인 필요", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
             "해야 할 일": ", ".join(item["tasks"]) or "-",
-            "재확인일": item["next_check_date"] or "-", "종료일": item["closed_date"] or "-",
-            "종료 사유": item["close_reason"] or "-", "메모": item["listing_note"] or "-",
-        })
+            "재확인일": item["next_check_date"] or "-", "메모": item["listing_note"] or "-",
+        }
+        if show_closure:
+            row["종료일"] = item["closed_date"] or "-"
+            row["종료 사유"] = item["close_reason"] or "-"
+        rows.append(row)
     return rows
 
 
@@ -260,7 +263,7 @@ def render_dashboard(go_to_listing) -> None:
         if listing_scope == "현재 매물만":
             _render_excel_export(all_listings, listings, received_start, received_end)
         return
-    st.dataframe(_display_rows(listings), width="stretch", hide_index=True)
+    st.dataframe(_display_rows(listings, show_closure=listing_scope != "현재 매물만"), width="stretch", hide_index=True)
     if listing_scope == "현재 매물만":
         _render_excel_export(all_listings, listings, received_start, received_end)
 

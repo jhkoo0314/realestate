@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from services.contact_format import format_phone_number
 from services.consultation_service import CONSULTATION_CATEGORIES, CONSULTATION_STATUSES, CONSULTATION_TYPES, delete_consultation, link_consultation_to_listing, save_consultation, save_consultation_changes, validate_consultation
 from storage.consultation_repository import get_consultation_detail, get_consultations
 from storage.listing_repository import search_listing_rounds
@@ -18,13 +19,23 @@ def _listing_label(item: dict) -> str:
     return f"{item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
 
 
+def _task_text(item: dict, today: str) -> str:
+    """상담 상태와 연락 기한에서 바로 처리할 일을 만든다."""
+    tasks: list[str] = []
+    if item["consultation_status"] == "확인 필요":
+        tasks.append("상담 확인 필요")
+    if item["next_contact_date"] and item["next_contact_date"] <= today and item["consultation_status"] != "종료":
+        tasks.append("다음 연락 필요")
+    return " · ".join(tasks) or "-"
+
+
 def _rows(items: list[dict]) -> list[dict]:
     today = date.today().isoformat()
     return [{
         "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-",
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"],
         "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
-        "다음 연락 필요": "확인 필요" if item["next_contact_date"] and item["next_contact_date"] <= today and item["consultation_status"] != "종료" else "-",
+        "해야 할 일": _task_text(item, today),
         "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_type"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None])) or "-", "상담 내용": item["consultation_note"],
     } for item in items]
 
@@ -53,6 +64,7 @@ def _render_registration() -> None:
             note = st.text_area("상담 내용", placeholder="예: 원하는 지역·입주 시기·특이사항")
             submitted = st.form_submit_button("일반 상담 등록", type="primary")
         if submitted:
+            customer_phone = format_phone_number(customer_phone)
             consultation, errors = validate_consultation({
                 "consultation_category": category, "customer_phone": customer_phone,
                 "consulted_date": consulted_date, "consultation_type": consultation_type, "consultation_note": note,
@@ -102,12 +114,21 @@ def _render_registration() -> None:
         with right:
             consultation_status = st.selectbox("상담 상태", CONSULTATION_STATUSES)
             next_contact = st.date_input("다음 연락일", value=None)
+        st.markdown("##### 희망 조건 (선택)")
+        desired_left, desired_middle, desired_right, desired_last = st.columns(4)
+        with desired_left: desired_area = st.text_input("희망 지역", placeholder="예: 배방읍")
+        with desired_middle: desired_room_type = st.text_input("희망 방 형태", placeholder="예: 투룸")
+        with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=None)
+        with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=None)
         note = st.text_area("상담 내용", placeholder="예: 방문 일정 협의, 가격 안내")
         submitted = st.form_submit_button("새 상담 등록", type="primary")
     if submitted:
+        customer_phone = format_phone_number(customer_phone)
         consultation, errors = validate_consultation({
             "consultation_category": category, "customer_phone": customer_phone, "consulted_date": consulted_date,
             "consultation_type": consultation_type, "consultation_note": note,
+            "desired_area": desired_area, "desired_room_type": desired_room_type,
+            "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
             "next_contact_date": next_contact, "consultation_status": consultation_status,
         })
         if errors:
@@ -166,21 +187,16 @@ def _render_lookup() -> None:
         with right:
             st.caption(f"상담 구분: {detail['consultation_category']}\n\n상담일: {detail['consulted_date']}\n\n상담 종류: {detail['consultation_type']}")
         note = st.text_area("상담 내용", value=detail["consultation_note"])
-        if detail["consultation_category"] == "일반 상담":
-            st.markdown("##### 희망 조건")
-            desired_left, desired_middle, desired_right, desired_last = st.columns(4)
-            with desired_left: desired_area = st.text_input("희망 지역", value=detail["desired_area"] or "")
-            with desired_middle: desired_room_type = st.text_input("희망 방 형태", value=detail["desired_room_type"] or "")
-            with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=detail["desired_deposit_manwon"])
-            with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=detail["desired_monthly_rent_manwon"])
-        else:
-            desired_area = detail["desired_area"]
-            desired_room_type = detail["desired_room_type"]
-            desired_deposit = detail["desired_deposit_manwon"]
-            desired_monthly_rent = detail["desired_monthly_rent_manwon"]
+        st.markdown("##### 희망 조건 (선택)")
+        desired_left, desired_middle, desired_right, desired_last = st.columns(4)
+        with desired_left: desired_area = st.text_input("희망 지역", value=detail["desired_area"] or "")
+        with desired_middle: desired_room_type = st.text_input("희망 방 형태", value=detail["desired_room_type"] or "")
+        with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=detail["desired_deposit_manwon"])
+        with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=detail["desired_monthly_rent_manwon"])
         submitted = st.form_submit_button("상담 정보 저장", type="primary")
     if submitted:
         try:
+            customer_phone = format_phone_number(customer_phone)
             save_consultation_changes(detail["consultation_id"], {
                 "consultation_category": detail["consultation_category"], "customer_name": detail["customer_name"], "customer_phone": customer_phone, "consultation_note": note,
                 "desired_area": desired_area, "desired_room_type": desired_room_type,

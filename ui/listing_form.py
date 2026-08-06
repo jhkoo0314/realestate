@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-import re
 
 import streamlit as st
 
@@ -22,6 +21,7 @@ from services.listing_service import (
     validate_relisting,
     validate_current_listing,
 )
+from services.contact_format import format_phone_number
 from storage.building_repository import get_building_units, get_unit_listing_history, search_buildings
 from storage.listing_create_repository import building_has_unit
 from storage.listing_write_repository import deactivate_unit, delete_unit, get_current_listing, get_unit_deletion_summary, get_unit_relisting_context
@@ -106,28 +106,8 @@ def _status_index(options: list[str], value: str | None) -> int:
     return options.index(value) if value in options else 0
 
 
-def _format_phone_number(value: str) -> str:
-    """숫자로 된 국내 전화번호를 입력 중에도 읽기 쉬운 형태로 표시한다."""
-    if not value or not re.fullmatch(r"[\d\s()-]+", value):
-        return value
-    digits = re.sub(r"\D", "", value)
-    if digits.startswith("02"):
-        if len(digits) <= 2:
-            return digits
-        if len(digits) <= 6:
-            return f"02-{digits[2:]}"
-        return f"02-{digits[2:-4]}-{digits[-4:]}"
-    if len(digits) <= 3:
-        return digits
-    if len(digits) <= 7:
-        return f"{digits[:3]}-{digits[3:]}"
-    if len(digits) == 10:
-        return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
-    return f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
-
-
 def _format_phone_input(key: str) -> None:
-    st.session_state[key] = _format_phone_number(str(st.session_state.get(key, "")))
+    st.session_state[key] = format_phone_number(str(st.session_state.get(key, "")))
 
 
 def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:

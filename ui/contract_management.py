@@ -31,9 +31,12 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
                 remaining = "D-day" if days == 0 else f"{days}일 남음"
         rows.append({
             "건물명": item["building_name"], "호실": item["unit_number"], "매물 접수일": item["received_date"],
-            "계약 유형": item["contract_type"], "시작일": item["contract_start_date"],
-            "종료일": item["contract_end_date"] or "-", "만료 임박": remaining,
-            "기간(개월)": item["term_months"] or "-", "계약 상태": item["contract_status"],
+            "계약 유형": item["contract_type"], "진행 시작일": item["contract_progress_date"] or "-", "정식 계약일": item["formal_contract_date"] or "-",
+            "임대차 시작일": item["contract_start_date"] or "-", "임대차 종료일": item["contract_end_date"] or "-", "만료 임박": remaining,
+            "기간(개월)": item["term_months"] or "-", "계약금": item["contract_deposit_manwon"] or "-",
+            "가계약금": item["provisional_deposit_manwon"] or "-",
+            "계약금 미수령": (item["contract_deposit_manwon"] - (item["provisional_deposit_manwon"] or 0)) if item["contract_deposit_manwon"] is not None else "-",
+            "추가 수령 예정일": item["remaining_deposit_due_date"] or "-", "잔금": item["balance_manwon"] or "-", "계약 상태": item["contract_status"],
             "메모": item["contract_note"] or "-",
         })
     return rows
@@ -43,23 +46,43 @@ def _render_status_change(contracts: list[dict]) -> None:
     if not contracts:
         return
     st.markdown("#### 저장된 계약 정보 수정")
-    labels = [f"{_listing_label(item)} · 시작 {item['contract_start_date']} · {item['contract_type']}" for item in contracts]
+    labels = [f"{_listing_label(item)} · 진행 {item['contract_progress_date'] or '-'} · {item['contract_type']}" for item in contracts]
     selected_label = st.selectbox("상태를 변경할 계약", labels, key="contract_status_target")
     selected = contracts[labels.index(selected_label)]
     index = CONTRACT_STATUSES.index(selected["contract_status"]) if selected["contract_status"] in CONTRACT_STATUSES else 0
     left, middle, right = st.columns(3)
     with left:
+        type_index = CONTRACT_TYPES.index(selected["contract_type"]) if selected["contract_type"] in CONTRACT_TYPES else 0
+        contract_type = st.selectbox("계약 유형", CONTRACT_TYPES, index=type_index, key=f"contract_type_{selected['contract_id']}")
         status = st.selectbox("계약 상태", CONTRACT_STATUSES, index=index, key=f"contract_status_{selected['contract_id']}")
     with middle:
-        contact = st.text_input("계약자 연락처 (내부정보)", value=selected["contractor_contact"] or "", key=f"contract_contact_{selected['contract_id']}")
+        progress_date = st.date_input("계약 진행 시작일", value=date.fromisoformat(selected["contract_progress_date"]) if selected["contract_progress_date"] else None, key=f"contract_progress_{selected['contract_id']}")
+        formal_date = st.date_input("정식 계약일", value=date.fromisoformat(selected["formal_contract_date"]) if selected["formal_contract_date"] else None, key=f"contract_formal_{selected['contract_id']}")
     with right:
-        deposit = st.number_input("계약금 (만원)", min_value=0, step=10, value=selected["contract_deposit_manwon"], key=f"contract_deposit_{selected['contract_id']}")
+        start_date = st.date_input("임대차 시작일", value=date.fromisoformat(selected["contract_start_date"]) if selected["contract_start_date"] else None, key=f"contract_start_{selected['contract_id']}")
+        end_date = st.date_input("임대차 종료일", value=date.fromisoformat(selected["contract_end_date"]) if selected["contract_end_date"] else None, key=f"contract_end_{selected['contract_id']}")
+    detail_left, detail_middle, detail_right = st.columns(3)
+    with detail_left:
+        contact = st.text_input("계약자 연락처 (내부정보)", value=selected["contractor_contact"] or "", key=f"contract_contact_{selected['contract_id']}")
+    with detail_middle:
+        term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=selected["term_months"], key=f"contract_term_{selected['contract_id']}")
+    with detail_right:
+        deposit = st.number_input("계약금 전체 (만원)", min_value=0, step=10, value=selected["contract_deposit_manwon"], key=f"contract_deposit_{selected['contract_id']}")
+        provisional_deposit = st.number_input("가계약금 수령액 (만원)", min_value=0, step=10, value=selected["provisional_deposit_manwon"], key=f"contract_provisional_deposit_{selected['contract_id']}")
+        remaining_deposit_due = st.date_input("계약금 추가 수령 예정일", value=date.fromisoformat(selected["remaining_deposit_due_date"]) if selected["remaining_deposit_due_date"] else None, key=f"contract_remaining_deposit_due_{selected['contract_id']}")
+        if deposit is not None:
+            st.caption(f"계약금 미수령: {max(deposit - (provisional_deposit or 0), 0):,}만원")
         balance = st.number_input("잔금 (만원)", min_value=0, step=10, value=selected["balance_manwon"], key=f"contract_balance_{selected['contract_id']}")
+    note = st.text_area("계약 메모", value=selected["contract_note"] or "", key=f"contract_note_{selected['contract_id']}")
     if st.button("계약 정보 저장", key=f"contract_status_save_{selected['contract_id']}"):
         try:
             change_contract_details(selected["contract_id"], {
-                "contract_status": status, "contractor_contact": contact,
-                "contract_deposit_manwon": deposit, "balance_manwon": balance,
+                "contract_type": contract_type, "contract_status": status,
+                "contract_progress_date": progress_date, "formal_contract_date": formal_date,
+                "contract_start_date": start_date, "contract_end_date": end_date, "term_months": term_months,
+                "contract_note": note, "contractor_contact": contact,
+                "contract_deposit_manwon": deposit, "provisional_deposit_manwon": provisional_deposit,
+                "remaining_deposit_due_date": remaining_deposit_due, "balance_manwon": balance,
             })
         except ValueError as error:
             st.error(str(error))
@@ -90,15 +113,15 @@ def _render_contract_lookup() -> None:
         with status_column:
             statuses = st.multiselect("계약 상태", CONTRACT_STATUSES, key="contract_status_filter")
         with start_column:
-            end_start = st.date_input("종료일 시작", value=None, key="contract_end_start")
+            end_start = st.date_input("임대차 종료일 시작", value=None, key="contract_end_start")
         with end_column:
-            end_end = st.date_input("종료일 종료", value=None, key="contract_end_end")
+            end_end = st.date_input("임대차 종료일 종료", value=None, key="contract_end_end")
         expiring_soon = st.checkbox("계약 만료 30일 전만 보기", key="contract_expiring_soon")
         searched = st.form_submit_button("계약 조회", type="primary")
     if searched:
         st.session_state["contract_has_searched"] = True
     if end_start and end_end and end_end < end_start:
-        st.error("종료일 종료는 시작일보다 빠를 수 없습니다.")
+        st.error("임대차 종료일 종료는 시작일보다 빠를 수 없습니다.")
         return
     contracts = get_contracts(
         query=query, statuses=statuses, end_start=_date_text(end_start), end_end=_date_text(end_end),
@@ -118,7 +141,7 @@ def _render_contract_lookup() -> None:
 
 def _render_contract_registration() -> None:
     st.markdown("#### 계약 등록")
-    st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 새 계약을 한 건 추가합니다. 기존 계약은 수정하지 않습니다.")
+    st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 가계약 진행·정식 계약·임대차 기간을 한 계약 기록에 이어서 관리합니다.")
     listing_query = st.text_input("연결할 매물 회차 찾기", key="contract_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
     selected = st.session_state.get("contract_selected_listing")
     if selected is None:
@@ -145,25 +168,32 @@ def _render_contract_registration() -> None:
                 contract_type = st.selectbox("계약 유형 *", CONTRACT_TYPES)
                 contract_status = st.selectbox("계약 상태 *", CONTRACT_STATUSES)
             with middle:
-                contract_start = st.date_input("계약 시작일 *", value=date.today())
-                contract_end = st.date_input("계약 종료일", value=None)
+                contract_progress = st.date_input("계약 진행 시작일", value=date.today())
+                formal_contract = st.date_input("정식 계약일", value=None)
             with right:
-                term_months = st.number_input("계약 기간 (개월)", min_value=1, step=1, value=None)
+                contract_start = st.date_input("임대차 시작일", value=None)
+                contract_end = st.date_input("임대차 종료일", value=None)
+            term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=None)
             contract_note = st.text_area("계약 메모", placeholder="예: 단기 연장 여부 확인 필요")
             detail_left, detail_right, _ = st.columns(3)
             with detail_left:
                 contractor_contact = st.text_input("계약자 연락처 (내부정보)", placeholder="예: 010-1234-5678")
             with detail_right:
-                contract_deposit = st.number_input("계약금 (만원)", min_value=0, step=10, value=None)
+                contract_deposit = st.number_input("계약금 전체 (만원)", min_value=0, step=10, value=None)
+                provisional_deposit = st.number_input("가계약금 수령액 (만원)", min_value=0, step=10, value=None)
+                remaining_deposit_due = st.date_input("계약금 추가 수령 예정일", value=None)
+                if contract_deposit is not None:
+                    st.caption(f"계약금 미수령: {max(contract_deposit - (provisional_deposit or 0), 0):,}만원")
                 balance = st.number_input("잔금 (만원)", min_value=0, step=10, value=None)
-            confirmed = st.checkbox("선택한 매물 기록에 새 계약을 추가하는 것을 확인했습니다.")
-            submitted = st.form_submit_button("새 계약 등록", type="primary", disabled=not confirmed)
+            submitted = st.form_submit_button("새 계약 등록", type="primary")
         if submitted:
             contract, errors = validate_contract({
-                "contract_type": contract_type, "contract_status": contract_status,
+                "contract_type": contract_type, "contract_status": contract_status, "contract_progress_date": contract_progress,
+                "formal_contract_date": formal_contract,
                 "contract_start_date": contract_start, "contract_end_date": contract_end,
                 "term_months": term_months, "contract_note": contract_note,
                 "contractor_contact": contractor_contact, "contract_deposit_manwon": contract_deposit,
+                "provisional_deposit_manwon": provisional_deposit, "remaining_deposit_due_date": remaining_deposit_due,
                 "balance_manwon": balance,
             })
             if errors:
