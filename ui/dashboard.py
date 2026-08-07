@@ -26,6 +26,7 @@ def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
         "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_availability", "dashboard_task",
+        "dashboard_deposit_min", "dashboard_deposit_max", "dashboard_monthly_rent_min", "dashboard_monthly_rent_max",
     ):
         st.session_state.pop(key, None)
     st.session_state["dashboard_has_searched"] = False
@@ -66,7 +67,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
         if availability == "날짜 지정" and item["available_from_date"]:
             availability = f"{item['available_from_date']} 입주"
         row = {
-            "상태": item["listing_status"], "건물명": item["building_name"], "호수": item["unit_number"],
+            "상태": item["listing_status"], "건물명": item["building_name"], "지번": item["lot_address"], "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
@@ -253,6 +254,15 @@ def render_dashboard(go_to_listing) -> None:
             room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
         with filter_columns[3]:
             photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
+        deposit_min_column, deposit_max_column, rent_min_column, rent_max_column = st.columns(4)
+        with deposit_min_column:
+            deposit_min = st.number_input("보증금 최소 (만원)", min_value=0, step=100, value=None, key="dashboard_deposit_min")
+        with deposit_max_column:
+            deposit_max = st.number_input("보증금 최대 (만원)", min_value=0, step=100, value=None, key="dashboard_deposit_max")
+        with rent_min_column:
+            monthly_rent_min = st.number_input("월세 최소 (만원)", min_value=0, step=5, value=None, key="dashboard_monthly_rent_min")
+        with rent_max_column:
+            monthly_rent_max = st.number_input("월세 최대 (만원)", min_value=0, step=5, value=None, key="dashboard_monthly_rent_max")
         task_filter = st.selectbox("확인 업무", ["전체"] + TASK_FILTERS, key="dashboard_task")
         searched = st.form_submit_button("조회", type="primary")
     if st.button("조회·필터 초기화", on_click=_clear_filters):
@@ -267,6 +277,12 @@ def render_dashboard(go_to_listing) -> None:
     if received_start and received_end and received_end < received_start:
         st.error("접수일 종료는 시작일보다 빠를 수 없습니다.")
         return
+    if deposit_min is not None and deposit_max is not None and deposit_max < deposit_min:
+        st.error("보증금 최대는 최소보다 작을 수 없습니다.")
+        return
+    if monthly_rent_min is not None and monthly_rent_max is not None and monthly_rent_max < monthly_rent_min:
+        st.error("월세 최대는 최소보다 작을 수 없습니다.")
+        return
     if received_start or received_end:
         start_label = received_start.isoformat() if received_start else "처음"
         end_label = received_end.isoformat() if received_end else "오늘까지"
@@ -275,6 +291,10 @@ def render_dashboard(go_to_listing) -> None:
         query=query,
         received_start=_date_text(received_start),
         received_end=_date_text(received_end),
+        deposit_min=deposit_min,
+        deposit_max=deposit_max,
+        monthly_rent_min=monthly_rent_min,
+        monthly_rent_max=monthly_rent_max,
         statuses=statuses,
         room_types=room_types,
         photo_availability=photo_availability,

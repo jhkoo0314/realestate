@@ -34,7 +34,7 @@ def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[s
         connection.close()
 
 
-def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_availability: list[str] | None = None, task_filter: str | None = None, listing_scope: str = "현재 매물만", path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, deposit_min: int | None = None, deposit_max: int | None = None, monthly_rent_min: int | None = None, monthly_rent_max: int | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_availability: list[str] | None = None, task_filter: str | None = None, listing_scope: str = "현재 매물만", path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     ensure_database_schema(path); conditions, parameters = ["u.is_active = 1", "b.is_active = 1"], []
     if listing_scope == "현재 매물만":
         conditions.extend(["l.closed_date IS NULL", "l.listing_status NOT IN ('계약 완료', '종료')"])
@@ -44,6 +44,10 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
         conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)"); parameters.extend([f"%{keyword}%"] * 4)
     if received_start: conditions.append("l.received_date >= ?"); parameters.append(received_start)
     if received_end: conditions.append("l.received_date <= ?"); parameters.append(received_end)
+    if deposit_min is not None: conditions.append("l.deposit_manwon >= ?"); parameters.append(deposit_min)
+    if deposit_max is not None: conditions.append("l.deposit_manwon <= ?"); parameters.append(deposit_max)
+    if monthly_rent_min is not None: conditions.append("l.monthly_rent_manwon >= ?"); parameters.append(monthly_rent_min)
+    if monthly_rent_max is not None: conditions.append("l.monthly_rent_manwon <= ?"); parameters.append(monthly_rent_max)
     for column, values in (("l.listing_status", statuses), ("u.room_type", room_types), ("l.has_listing_photos", photo_availability)):
         if values: conditions.append(f"{column} IN ({', '.join('?' for _ in values)})"); parameters.extend(values)
     connection = get_connection(path)
