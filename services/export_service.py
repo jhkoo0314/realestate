@@ -80,6 +80,17 @@ CONSULTATION_EXPORT_COLUMNS = [
     ("상담 상태", "consultation_status", "text"),
 ]
 
+TODAY_TASK_EXPORT_COLUMNS = [
+    ("구분", "구분", "text"),
+    ("업무 구분", "업무 구분", "text"),
+    ("해야 할 일", "해야 할 일", "text"),
+    ("기한", "기한", "text"),
+    ("건물명", "건물명", "text"),
+    ("지번", "지번", "text"),
+    ("호실", "호실", "text"),
+    ("상태", "상태", "text"),
+]
+
 
 def _excel_value(value: Any, value_type: str) -> Any:
     if value in (None, ""):
@@ -137,6 +148,15 @@ def create_consultation_excel(rows: list[dict[str, Any]]) -> bytes:
     return _create_excel(rows, CONSULTATION_EXPORT_COLUMNS, "상담 목록")
 
 
+def create_today_tasks_excel(tasks: dict[str, list[dict[str, Any]]]) -> bytes:
+    """오늘·지연·상시 확인 필요 업무만 명시한 열로 내보낸다."""
+    rows = []
+    for group in ("오늘", "지연", "상시 확인 필요"):
+        for task in tasks.get(group, []):
+            rows.append({"구분": group, **{key: value for key, value in task.items() if key != "kind"}})
+    return _create_excel(rows, TODAY_TASK_EXPORT_COLUMNS, "오늘 할 일")
+
+
 def make_export_filename(received_start: str | None, received_end: str | None) -> str:
     """접수일 범위와 생성 시각을 알 수 있는 다운로드 파일 이름을 만든다."""
     start = received_start or "처음"
@@ -149,3 +169,9 @@ def make_management_export_filename(kind: str) -> str:
     """계약·상담 조회 결과의 생성 시각이 드러나는 파일 이름을 만든다."""
     created = datetime.now().strftime("%Y%m%d_%H%M")
     return f"{kind}_조회결과_{created}.xlsx"
+
+
+def make_today_tasks_export_filename(reference_date: str) -> str:
+    """선택한 업무 기준일과 생성 시각이 보이는 파일 이름을 만든다."""
+    created = datetime.now().strftime("%Y%m%d_%H%M")
+    return f"오늘할일_기준일_{reference_date}_{created}.xlsx"

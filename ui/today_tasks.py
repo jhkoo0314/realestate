@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.today_task_service import get_today_tasks
+from services.export_service import create_today_tasks_excel, make_today_tasks_export_filename
 
 
 def _render_group(title: str, rows: list[dict[str, str]], empty_message: str) -> None:
@@ -33,6 +34,19 @@ def render_today_tasks() -> None:
     for column, key in zip(metrics, ("오늘", "지연", "상시 확인 필요")):
         column.metric(key, len(tasks[key]))
     st.caption("오늘·지연은 날짜가 있는 업무이며, 조건 확인은 사진·현장 상태처럼 날짜 없이 확인이 필요한 업무입니다. 연락처·비밀번호·내부 메모는 표시하지 않습니다.")
+    try:
+        export_data = create_today_tasks_excel(tasks)
+    except Exception as error:
+        st.error(f"오늘 할 일 엑셀 파일을 만들지 못했습니다. ({error})")
+    else:
+        st.download_button(
+            "오늘 할 일 엑셀 내려받기",
+            data=export_data,
+            file_name=make_today_tasks_export_filename(reference_date.isoformat()),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            key="today_tasks_excel_download",
+        )
     _render_group("오늘 해야 할 일", tasks["오늘"], "선택한 날짜에 해야 할 일이 없습니다.")
     _render_group("지연된 일", tasks["지연"], "선택한 날짜보다 지연된 일이 없습니다.")
     _render_group("상시 확인 필요", tasks["상시 확인 필요"], "날짜와 무관하게 확인할 매물 조건이 없습니다.")
