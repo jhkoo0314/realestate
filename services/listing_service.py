@@ -19,6 +19,7 @@ LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능",
 UNKNOWN_BUILDING_NAME = "건물명 미입력"
 ROOM_TYPES = ["원룸", "분리형 원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
 AVAILABILITY_TYPES = ["즉시입주", "날짜 지정", "퇴실 후 협의", "확인 필요"]
+LISTING_HOLDERS = ["크린주택관리", "삼성주택관리", "한빛주택관리", "국제주택관리", "개인매물", "직접입력"]
 
 
 def _clean_text(value: Any) -> str | None:
@@ -30,6 +31,18 @@ def _date_text(value: Any) -> str | None:
     if isinstance(value, date):
         return value.isoformat()
     return _clean_text(value)
+
+
+def _listing_holder(raw: dict[str, Any], *, required: bool) -> tuple[str | None, str | None]:
+    choice = _clean_text(raw.get("listing_holder_choice"))
+    holder = _clean_text(raw.get("listing_holder_custom")) if choice == "직접입력" else choice
+    if choice == "미입력":
+        holder = None
+    if required and not holder:
+        return None, "매물 보유처를 선택해 주세요. 직접입력을 고르면 이름도 입력해 주세요."
+    if choice and choice not in LISTING_HOLDERS and choice != "미입력":
+        return None, "매물 보유처를 목록에서 선택해 주세요."
+    return holder, None
 
 
 def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any]] | None, list[str]]:
@@ -45,6 +58,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     rent = raw.get("monthly_rent_manwon")
     availability_type = raw.get("availability_type")
     available_from_date = raw.get("available_from_date")
+    listing_holder, holder_error = _listing_holder(raw, required=True)
 
     if lot_area or lot_number:
         if not lot_area:
@@ -61,6 +75,8 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
         errors.append("월세를 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
     if availability_type == "날짜 지정" and not available_from_date:
         errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
+    if holder_error:
+        errors.append(holder_error)
 
     if errors:
         return None, errors
@@ -99,6 +115,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "cleaning_status": raw.get("cleaning_status"),
             "wallpaper_status": raw.get("wallpaper_status"),
             "repair_status": raw.get("repair_status"),
+            "listing_holder": listing_holder,
             "listing_note": _clean_text(raw.get("listing_note")),
             "landlord_contact": _clean_text(raw.get("landlord_contact")),
             "tenant_contact": _clean_text(raw.get("tenant_contact")),
@@ -150,6 +167,7 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
     price_mode = raw.get("price_mode")
     deposit = raw.get("deposit_manwon")
     rent = raw.get("monthly_rent_manwon")
+    listing_holder, holder_error = _listing_holder(raw, required=True)
 
     if not listing_status:
         errors.append("매물 상태를 선택해 주세요.")
@@ -157,6 +175,8 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
         errors.append("입주 가능 유형을 선택해 주세요.")
     if availability_type == "날짜 지정" and not available_from_date:
         errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
+    if holder_error:
+        errors.append(holder_error)
     if price_mode == "새 가격 입력":
         if deposit is not None and deposit <= 0:
             errors.append("보증금을 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
@@ -186,6 +206,7 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
         "cleaning_status": raw.get("cleaning_status"),
         "wallpaper_status": raw.get("wallpaper_status"),
         "repair_status": raw.get("repair_status"),
+        "listing_holder": listing_holder,
         "listing_note": note,
         "landlord_contact": _clean_text(raw.get("landlord_contact")),
         "tenant_contact": _clean_text(raw.get("tenant_contact")),

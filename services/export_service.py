@@ -15,6 +15,7 @@ from services.lot_address_service import split_lot_address
 EXPORT_COLUMNS = [
     ("접수일", "received_date", "date"),
     ("매물 상태", "listing_status", "text"),
+    ("매물 보유처", "listing_holder", "text"),
     ("건물명", "building_name", "text"),
     ("지번 지역", "lot_area", "text"),
     ("번지 번호", "lot_number", "text"),

@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.listing_service import LISTING_STATUSES, ROOM_TYPES, close_listing, delete_listing
+from services.listing_service import LISTING_HOLDERS, LISTING_STATUSES, ROOM_TYPES, close_listing, delete_listing
 from services.lot_address_service import split_lot_address
 from services.backup_service import create_daily_backup
 from services.export_service import create_current_listing_excel, make_export_filename
@@ -27,6 +27,7 @@ def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
         "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_availability", "dashboard_task",
+        "dashboard_listing_holders", "dashboard_listing_holder_query",
         "dashboard_deposit_min", "dashboard_deposit_max", "dashboard_monthly_rent_min", "dashboard_monthly_rent_max",
     ):
         st.session_state.pop(key, None)
@@ -69,7 +70,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
         if availability == "날짜 지정" and item["available_from_date"]:
             availability = f"{item['available_from_date']} 입주"
         row = {
-            "상태": item["listing_status"], "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
+            "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
@@ -89,7 +90,7 @@ def _render_quick_edit(selected: dict) -> None:
         f"{selected['building_name']} · {selected['lot_address']} · {selected['unit_number']}호 · "
         f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] if selected['deposit_manwon'] is not None else '-'}/{selected['monthly_rent_manwon'] if selected['monthly_rent_manwon'] is not None else '-'}"
     )
-    st.caption("확인·관리 상태만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
+    st.caption("확인·관리 상태와 매물 보유처만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
     left, middle, date_column = st.columns(3)
     with left:
         status_index = LISTING_STATUSES.index(selected["listing_status"]) if selected["listing_status"] in LISTING_STATUSES else 0
@@ -100,6 +101,12 @@ def _render_quick_edit(selected: dict) -> None:
     with date_column:
         current_date = date.fromisoformat(selected["next_check_date"]) if selected["next_check_date"] else None
         next_check = st.date_input("재확인 예정일", value=current_date, key=f"quick_next_check_{selected['listing_id']}")
+    holder_options = ["미입력"] + LISTING_HOLDERS
+    holder_initial = selected["listing_holder"] if selected["listing_holder"] in LISTING_HOLDERS else ("직접입력" if selected["listing_holder"] else "미입력")
+    holder_choice = st.selectbox("매물 보유처", holder_options, index=holder_options.index(holder_initial), key=f"quick_listing_holder_choice_{selected['listing_id']}")
+    holder_custom = ""
+    if holder_choice == "직접입력":
+        holder_custom = st.text_input("매물 보유처 직접입력", value=selected["listing_holder"] if holder_initial == "직접입력" else "", key=f"quick_listing_holder_custom_{selected['listing_id']}", placeholder="예: 지역 주택관리업체")
     st.markdown("##### 현장 준비 상태")
     cleaning_column, wallpaper_column, repair_column = st.columns(3)
     with cleaning_column:
@@ -112,9 +119,13 @@ def _render_quick_edit(selected: dict) -> None:
         repair_index = SITE_PREPARATION_STATUSES.index(selected["repair_status"]) if selected["repair_status"] in SITE_PREPARATION_STATUSES else 0
         repair_status = st.selectbox("수리 상태", SITE_PREPARATION_STATUSES, index=repair_index, key=f"quick_repair_{selected['listing_id']}")
     if st.button("빠른 수정 저장", type="primary", key=f"quick_save_{selected['listing_id']}"):
+        listing_holder = holder_custom.strip() if holder_choice == "직접입력" else (None if holder_choice == "미입력" else holder_choice)
+        if holder_choice == "직접입력" and not listing_holder:
+            st.error("직접 입력할 매물 보유처 이름을 입력해 주세요.")
+            return
         try:
             saved_has_photo = has_photo
-            update_listing_quick_fields(selected["listing_id"], status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status)
+            update_listing_quick_fields(selected["listing_id"], status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status, listing_holder)
             create_daily_backup()
         except Exception as error:
             st.error(f"수정하지 못했습니다. ({error})")
@@ -122,7 +133,7 @@ def _render_quick_edit(selected: dict) -> None:
         st.session_state["dashboard_quick_save_result"] = (
             f"빠른 수정 저장 완료: 상태 {status} · 사진 보유 {saved_has_photo} · "
             f"청소 {cleaning_status} · 도배 {wallpaper_status} · 수리 {repair_status} · "
-            f"재확인일 {_date_text(next_check) or '미지정'}"
+            f"보유처 {listing_holder or '미입력'} · 재확인일 {_date_text(next_check) or '미지정'}"
         )
         st.rerun()
 
@@ -256,6 +267,8 @@ def render_dashboard(go_to_listing) -> None:
             room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
         with filter_columns[3]:
             photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
+        listing_holders = st.multiselect("매물 보유처", ["미입력"] + LISTING_HOLDERS[:-1], key="dashboard_listing_holders")
+        listing_holder_query = st.text_input("직접 입력 보유처 검색", key="dashboard_listing_holder_query")
         deposit_min_column, deposit_max_column, rent_min_column, rent_max_column = st.columns(4)
         with deposit_min_column:
             deposit_min = st.number_input("보증금 최소 (만원)", min_value=0, step=100, value=None, key="dashboard_deposit_min")
@@ -300,6 +313,8 @@ def render_dashboard(go_to_listing) -> None:
         statuses=statuses,
         room_types=room_types,
         photo_availability=photo_availability,
+        listing_holders=listing_holders,
+        listing_holder_query=listing_holder_query,
         task_filter=None if task_filter == "전체" else task_filter,
         listing_scope=listing_scope,
     )
