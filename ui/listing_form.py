@@ -22,13 +22,14 @@ from services.listing_service import (
     validate_current_listing,
 )
 from services.contact_format import format_phone_number
+from services.lot_address_service import split_lot_address
 from storage.building_repository import get_building_units, get_unit_listing_history, search_buildings
 from storage.listing_create_repository import building_has_unit
 from storage.listing_write_repository import deactivate_unit, delete_unit, get_current_listing, get_unit_deletion_summary, get_unit_relisting_context
 
 
 INPUT_KEYS = [
-    "building_name", "lot_address", "common_entrance_password",
+    "building_name", "lot_address", "lot_area", "lot_number", "common_entrance_password",
     "has_elevator", "parking_status", "building_internal_note", "unit_number", "floor_number",
     "room_type", "direction", "access_method", "unit_access_password",
     "unit_highlights", "unit_options", "listing_status", "deposit_manwon", "monthly_rent_manwon",
@@ -139,6 +140,7 @@ def _collect_input() -> dict:
     if building := _selected_building():
         values["building_name"] = building["building_name"]
         values["lot_address"] = building["lot_address"]
+        values["lot_area"], values["lot_number"] = split_lot_address(building["lot_address"])
     return values
 
 
@@ -212,8 +214,12 @@ def _render_new_building_fields() -> None:
     with building_left:
         st.text_input("건물명 (선택)", key="registration_building_name", placeholder="예: 대성빌 · 모르면 비워 두세요")
     with building_right:
-        st.text_input("지번 *", key="registration_lot_address", placeholder="예: 북수리 1026")
-    st.caption("건물명을 모르면 비워 두세요. 지번과 호수로 등록하며, 목록에는 `건물명 미입력`으로 표시됩니다.")
+        area_column, number_column = st.columns(2)
+        with area_column:
+            st.text_input("지번 지역 *", key="registration_lot_area", placeholder="예: 북수리")
+        with number_column:
+            st.text_input("번지 번호 *", key="registration_lot_number", placeholder="예: 1026, 산 12-3")
+    st.caption("건물명을 모르면 비워 두세요. 지번 지역과 번지 번호, 호수로 등록하며 목록에는 `건물명 미입력`으로 표시됩니다.")
     st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password", type="password")
     with st.expander("건물 상세정보"):
         detail_left, detail_right = st.columns(2)

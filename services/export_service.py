@@ -9,13 +9,15 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from services.lot_address_service import split_lot_address
 
 
 EXPORT_COLUMNS = [
     ("접수일", "received_date", "date"),
     ("매물 상태", "listing_status", "text"),
     ("건물명", "building_name", "text"),
-    ("지번주소", "lot_address", "text"),
+    ("지번 지역", "lot_area", "text"),
+    ("번지 번호", "lot_number", "text"),
     ("호실", "unit_number", "text"),
     ("층", "floor_number", "number"),
     ("룸 형태", "room_type", "text"),
@@ -117,7 +119,11 @@ def _create_excel(rows: list[dict[str, Any]], columns: list[tuple[str, str, str]
 
 def create_current_listing_excel(rows: list[dict[str, Any]]) -> bytes:
     """명시한 열만 사용해 현재 매물 내부 업무용 엑셀을 만든다. 연락처 관련 열은 포함하지 않는다."""
-    return _create_excel(rows, EXPORT_COLUMNS, "현재 매물")
+    export_rows = []
+    for row in rows:
+        lot_area, lot_number = split_lot_address(row.get("lot_address"))
+        export_rows.append({**row, "lot_area": lot_area, "lot_number": lot_number})
+    return _create_excel(export_rows, EXPORT_COLUMNS, "현재 매물")
 
 
 def create_contract_excel(rows: list[dict[str, Any]]) -> bytes:

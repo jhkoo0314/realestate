@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.listing_service import LISTING_STATUSES, ROOM_TYPES, close_listing, delete_listing
+from services.lot_address_service import split_lot_address
 from services.backup_service import create_daily_backup
 from services.export_service import create_current_listing_excel, make_export_filename
 from storage.export_repository import get_current_listing_export_rows
@@ -63,11 +64,12 @@ def _photo_availability_text(item: dict) -> str:
 def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[dict]:
     rows = []
     for item in listings:
+        lot_area, lot_number = split_lot_address(item["lot_address"])
         availability = item["availability_type"]
         if availability == "날짜 지정" and item["available_from_date"]:
             availability = f"{item['available_from_date']} 입주"
         row = {
-            "상태": item["listing_status"], "건물명": item["building_name"], "지번": item["lot_address"], "호수": item["unit_number"],
+            "상태": item["listing_status"], "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),

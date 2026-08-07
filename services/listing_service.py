@@ -12,6 +12,7 @@ from storage.listing_create_repository import (
 )
 from storage.listing_write_repository import close_current_listing, delete_listing as delete_listing_record, save_new_listing_round, update_current_listing
 from services.backup_service import create_daily_backup
+from services.lot_address_service import combine_lot_address
 
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
@@ -36,15 +37,22 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     errors: list[str] = []
 
     building_name = _clean_text(raw.get("building_name")) or UNKNOWN_BUILDING_NAME
-    lot_address = _clean_text(raw.get("lot_address"))
+    lot_area = _clean_text(raw.get("lot_area"))
+    lot_number = _clean_text(raw.get("lot_number"))
+    lot_address = combine_lot_address(lot_area, lot_number) if lot_area or lot_number else _clean_text(raw.get("lot_address"))
     unit_number = _clean_text(raw.get("unit_number"))
     deposit = raw.get("deposit_manwon")
     rent = raw.get("monthly_rent_manwon")
     availability_type = raw.get("availability_type")
     available_from_date = raw.get("available_from_date")
 
-    if not lot_address:
-        errors.append("지번을 입력해 주세요.")
+    if lot_area or lot_number:
+        if not lot_area:
+            errors.append("지번 지역을 입력해 주세요.")
+        if not lot_number:
+            errors.append("번지 번호를 입력해 주세요.")
+    elif not lot_address:
+        errors.append("지번 지역과 번지 번호를 입력해 주세요.")
     if not unit_number:
         errors.append("호수를 입력해 주세요.")
     if deposit is not None and deposit <= 0:

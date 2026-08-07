@@ -22,6 +22,7 @@ from storage.building_repository import (
     update_unit_management_detail,
 )
 from storage.contract_repository import get_contracts
+from services.lot_address_service import combine_lot_address, split_lot_address
 
 
 INFO_STATUSES = ["기본등록", "일부확인", "확인완료", "재확인 필요"]
@@ -73,8 +74,16 @@ def _render_search() -> dict | None:
 
 def _render_building_edit(building: dict) -> None:
     building_id = building["id"]
+    lot_area, lot_number = split_lot_address(building["lot_address"])
     with st.expander("건물 공통정보 수정"):
         with st.form(f"building_edit_{building_id}"):
+            address_left, address_right = st.columns(2)
+            with address_left:
+                edited_lot_area = st.text_input("지번 지역 *", value=lot_area, key=f"building_lot_area_{building_id}")
+            with address_right:
+                edited_lot_number = st.text_input("번지 번호 *", value=lot_number, key=f"building_lot_number_{building_id}")
+            if not lot_number:
+                st.caption("기존 지번 형식을 자동으로 나누지 못했습니다. 지번 지역과 번지 번호를 확인한 뒤 저장해 주세요.")
             left, middle, right = st.columns(3)
             with left:
                 elevator = st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], index=_index(["확인 필요", "있음", "없음"], building["has_elevator"]), key=f"building_elevator_{building_id}")
@@ -99,10 +108,15 @@ def _render_building_edit(building: dict) -> None:
                 new_password = st.text_input("새 공동현관 비밀번호", type="password", key=f"building_password_{building_id}")
             submitted = st.form_submit_button("건물 기본정보 저장", type="primary")
         if submitted:
+            address_was_not_split = not lot_number and edited_lot_area == lot_area and not edited_lot_number.strip()
+            if not address_was_not_split and (not edited_lot_area.strip() or not edited_lot_number.strip()):
+                st.error("지번 지역과 번지 번호를 모두 입력해 주세요.")
+                return
             if password_action == "새 비밀번호로 변경" and not new_password.strip():
                 st.error("새 비밀번호를 입력하거나 ‘기존 비밀번호 유지’를 선택해 주세요.")
                 return
             update_building_management_detail(building_id, {
+                "lot_address": building["lot_address"] if address_was_not_split else combine_lot_address(edited_lot_area, edited_lot_number),
                 "has_elevator": elevator, "parking_status": parking, "has_cctv": cctv, "pet_policy": pet_policy,
                 "move_in_registration_policy": move_in, "short_term_policy": short_term, "common_fee_note": common_fee or None,
                 "building_highlights": highlights or None, "info_status": info_status,
