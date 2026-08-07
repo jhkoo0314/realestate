@@ -41,6 +41,42 @@ EXPORT_COLUMNS = [
     ("이번 매물 옵션 변경 메모", "option_change_note", "text"),
 ]
 
+CONTRACT_EXPORT_COLUMNS = [
+    ("건물명", "building_name", "text"),
+    ("지번주소", "lot_address", "text"),
+    ("호실", "unit_number", "text"),
+    ("매물 접수일", "received_date", "date"),
+    ("계약 유형", "contract_type", "text"),
+    ("계약 상태", "contract_status", "text"),
+    ("계약 진행 시작일", "contract_progress_date", "date"),
+    ("정식 계약일", "formal_contract_date", "date"),
+    ("임대차 시작일", "contract_start_date", "date"),
+    ("임대차 종료일", "contract_end_date", "date"),
+    ("임대차 기간(개월)", "term_months", "number"),
+    ("계약금 전체(만원)", "contract_deposit_manwon", "number"),
+    ("가계약금 수령액(만원)", "provisional_deposit_manwon", "number"),
+    ("계약금 추가 수령 예정일", "remaining_deposit_due_date", "date"),
+    ("잔금(만원)", "balance_manwon", "number"),
+    ("계약 메모", "contract_note", "text"),
+]
+
+CONSULTATION_EXPORT_COLUMNS = [
+    ("건물명", "building_name", "text"),
+    ("지번주소", "lot_address", "text"),
+    ("호실", "unit_number", "text"),
+    ("매물 접수일", "received_date", "date"),
+    ("상담 구분", "consultation_category", "text"),
+    ("상담일", "consulted_date", "date"),
+    ("상담 종류", "consultation_type", "text"),
+    ("유입 경로", "consultation_source", "text"),
+    ("희망 지역", "desired_area", "text"),
+    ("희망 룸 형태", "desired_room_type", "text"),
+    ("희망 보증금(만원)", "desired_deposit_manwon", "number"),
+    ("희망 월세(만원)", "desired_monthly_rent_manwon", "number"),
+    ("다음 연락일", "next_contact_date", "date"),
+    ("상담 상태", "consultation_status", "text"),
+]
+
 
 def _excel_value(value: Any, value_type: str) -> Any:
     if value in (None, ""):
@@ -50,22 +86,21 @@ def _excel_value(value: Any, value_type: str) -> Any:
     return value
 
 
-def create_current_listing_excel(rows: list[dict[str, Any]]) -> bytes:
-    """명시한 열만 사용해 엑셀 내용을 만든다. 연락처 관련 열은 포함하지 않는다."""
+def _create_excel(rows: list[dict[str, Any]], columns: list[tuple[str, str, str]], title: str) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "현재 매물"
-    sheet.append([label for label, _, _ in EXPORT_COLUMNS])
+    sheet.title = title
+    sheet.append([label for label, _, _ in columns])
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="1F4E78")
 
     for row in rows:
-        sheet.append([_excel_value(row.get(key), value_type) for _, key, value_type in EXPORT_COLUMNS])
+        sheet.append([_excel_value(row.get(key), value_type) for _, key, value_type in columns])
 
     sheet.freeze_panes = "A2"
     sheet.auto_filter.ref = sheet.dimensions
-    for index, (_, _, value_type) in enumerate(EXPORT_COLUMNS, start=1):
+    for index, (_, _, value_type) in enumerate(columns, start=1):
         column = get_column_letter(index)
         sheet.column_dimensions[column].width = 14 if value_type != "text" else 20
         if value_type == "date":
@@ -80,9 +115,30 @@ def create_current_listing_excel(rows: list[dict[str, Any]]) -> bytes:
     return output.getvalue()
 
 
+def create_current_listing_excel(rows: list[dict[str, Any]]) -> bytes:
+    """명시한 열만 사용해 현재 매물 내부 업무용 엑셀을 만든다. 연락처 관련 열은 포함하지 않는다."""
+    return _create_excel(rows, EXPORT_COLUMNS, "현재 매물")
+
+
+def create_contract_excel(rows: list[dict[str, Any]]) -> bytes:
+    """계약 조회 결과를 내보낸다. 계약자 연락처는 포함하지 않는다."""
+    return _create_excel(rows, CONTRACT_EXPORT_COLUMNS, "계약 목록")
+
+
+def create_consultation_excel(rows: list[dict[str, Any]]) -> bytes:
+    """상담 조회 결과를 내보낸다. 고객 식별정보와 자유 메모는 포함하지 않는다."""
+    return _create_excel(rows, CONSULTATION_EXPORT_COLUMNS, "상담 목록")
+
+
 def make_export_filename(received_start: str | None, received_end: str | None) -> str:
     """접수일 범위와 생성 시각을 알 수 있는 다운로드 파일 이름을 만든다."""
     start = received_start or "처음"
     end = received_end or "전체"
     created = datetime.now().strftime("%Y%m%d_%H%M")
     return f"매물목록_접수일_{start}_{end}_{created}.xlsx"
+
+
+def make_management_export_filename(kind: str) -> str:
+    """계약·상담 조회 결과의 생성 시각이 드러나는 파일 이름을 만든다."""
+    created = datetime.now().strftime("%Y%m%d_%H%M")
+    return f"{kind}_조회결과_{created}.xlsx"

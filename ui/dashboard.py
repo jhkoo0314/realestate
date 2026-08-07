@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.listing_service import LISTING_STATUSES, ROOM_TYPES, delete_listing
+from services.listing_service import LISTING_STATUSES, ROOM_TYPES, close_listing, delete_listing
 from services.backup_service import create_daily_backup
 from services.export_service import create_current_listing_excel, make_export_filename
 from storage.export_repository import get_current_listing_export_rows
@@ -19,6 +19,7 @@ from storage.database import (
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "사진 확인 필요", "현장 상태 확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
+CLOSE_REASONS = ["계약 완료", "타 부동산 계약", "임대인 보류", "광고 중단", "정보 오류", "기타"]
 
 
 def _clear_filters() -> None:
@@ -122,6 +123,27 @@ def _render_quick_edit(selected: dict) -> None:
         )
         st.rerun()
 
+    with st.expander("이 매물 종료 처리"):
+        st.warning("종료해도 매물 기록은 삭제되지 않으며, 연결된 계약·상담 기록도 그대로 유지됩니다.")
+        st.caption("계약 여부가 확인되지 않았다면 `계약 완료`를 선택하지 말고, 확인 필요 또는 보류 상태로 남겨 주세요.")
+        close_reason = st.selectbox("종료 사유", CLOSE_REASONS, key=f"dashboard_close_reason_{selected['listing_id']}")
+        close_date = st.date_input("종료일", value=date.today(), key=f"dashboard_close_date_{selected['listing_id']}")
+        confirmed = st.checkbox(
+            "이 매물을 종료 처리해 현재 매물 목록에서 제외하는 것을 확인했습니다.",
+            key=f"dashboard_close_listing_confirm_{selected['listing_id']}",
+        )
+        if st.button("종료 처리", type="secondary", disabled=not confirmed, key=f"dashboard_close_listing_{selected['listing_id']}"):
+            try:
+                close_listing(selected["listing_id"], close_date, close_reason)
+            except Exception as error:
+                st.error(f"매물을 종료 처리하지 못했습니다. ({error})")
+                return
+            st.session_state["dashboard_quick_save_result"] = (
+                f"매물 종료 처리 완료: {selected['building_name']} · {selected['unit_number']}호 · "
+                f"종료일 {close_date.isoformat()} · 종료 사유 {close_reason}. 과거 이력은 유지됩니다."
+            )
+            st.rerun()
+
     with st.expander("이 매물 완전 삭제"):
         st.error("이 매물은 복구할 수 없게 삭제됩니다. 연결된 계약·상담 기록도 함께 삭제됩니다.")
         confirmed = st.checkbox("이 매물과 연결 기록을 완전히 삭제하는 것을 확인했습니다.", key=f"dashboard_delete_listing_confirm_{selected['listing_id']}")
@@ -137,7 +159,7 @@ def _render_quick_edit(selected: dict) -> None:
 
 def _render_closed_listing_detail(selected: dict) -> None:
     st.markdown("#### 선택한 종료 매물")
-    st.info("종료된 매물은 매물 현황 리스트에서 조회만 할 수 있습니다. 종료 처리는 매물 등록·수정 탭에서 합니다.")
+    st.info("종료된 매물은 매물 현황 리스트에서 조회만 할 수 있습니다. 종료 처리는 현재 매물을 선택했을 때만 할 수 있습니다.")
     st.caption(
         f"{selected['building_name']} · {selected['lot_address']} · {selected['unit_number']}호 · "
         f"접수일 {selected['received_date']} · 종료일 {selected['closed_date'] or '-'} · 종료 사유 {selected['close_reason'] or '-'}"

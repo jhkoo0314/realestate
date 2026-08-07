@@ -8,6 +8,7 @@ import streamlit as st
 
 from services.contact_format import format_phone_number
 from services.consultation_service import CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, delete_consultation, link_consultation_to_listing, save_consultation, save_consultation_changes, validate_consultation
+from services.export_service import create_consultation_excel, make_management_export_filename
 from storage.consultation_repository import get_consultation_detail, get_consultations
 from storage.listing_repository import search_listing_rounds
 
@@ -17,6 +18,10 @@ def _listing_label(item: dict) -> str:
         return "일반 상담 · 연결 매물 없음"
     unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
     return f"{item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
+
+
+def _date_text(value: date | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 def _task_text(item: dict, today: str) -> str:
@@ -152,23 +157,61 @@ def _render_registration() -> None:
 def _render_lookup() -> None:
     st.markdown("#### 상담 조회·수정")
     with st.form("consultation_search_form"):
-        query_column, status_column = st.columns([2, 2])
+        query_column, category_column, status_column = st.columns([2, 1, 1])
         with query_column:
             query = st.text_input("건물명·지번·호수·희망 지역 검색", key="consultation_query")
+        with category_column:
+            categories = st.multiselect("상담 구분", CONSULTATION_CATEGORIES, key="consultation_category_filter")
         with status_column:
             statuses = st.multiselect("상담 상태", CONSULTATION_STATUSES, key="consultation_status_filter")
-        due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
+        start_column, end_column, due_column = st.columns([1, 1, 2])
+        with start_column:
+            consulted_start = st.date_input("상담일 시작", value=None, key="consultation_start")
+        with end_column:
+            consulted_end = st.date_input("상담일 종료", value=None, key="consultation_end")
+        with due_column:
+            due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
         searched = st.form_submit_button("상담 조회", type="primary")
     if searched: st.session_state["consultation_has_searched"] = True
-    items = get_consultations(query=query, statuses=statuses, due_only=due_only)
+    if consulted_start and consulted_end and consulted_end < consulted_start:
+        st.error("상담일 종료는 시작일보다 빠를 수 없습니다.")
+        return
+    items = get_consultations(
+        query=query,
+        categories=categories,
+        statuses=statuses,
+        consulted_start=_date_text(consulted_start),
+        consulted_end=_date_text(consulted_end),
+        due_only=due_only,
+    )
     if not st.session_state.get("consultation_has_searched"):
         st.info("조건을 입력한 뒤 `상담 조회`를 누르면 상담 목록이 표시됩니다.")
         return
+    if consulted_start or consulted_end:
+        start_label = consulted_start.isoformat() if consulted_start else "처음"
+        end_label = consulted_end.isoformat() if consulted_end else "오늘까지"
+        st.caption(f"적용 중인 상담일 기간: {start_label} ~ {end_label}")
     st.caption(f"조회된 상담 {len(items)}건")
     if not items:
         st.info("조건에 맞는 상담 기록이 없습니다.")
         return
     st.dataframe(_rows(items), width="stretch", hide_index=True)
+    st.markdown("##### 엑셀 내보내기")
+    st.caption(f"현재 조회 결과 {len(items)}건을 내보냅니다.")
+    st.warning("내부 업무용 파일입니다. 고객 이름·연락처와 상담 내용은 포함하지 않으며, 외부에 공유하지 마세요.")
+    try:
+        export_data = create_consultation_excel(items)
+    except Exception as error:
+        st.error(f"엑셀 파일을 만들지 못했습니다. ({error})")
+    else:
+        st.download_button(
+            "상담 조회 결과 엑셀 내려받기",
+            data=export_data,
+            file_name=make_management_export_filename("상담목록"),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            key="consultation_excel_download",
+        )
     labels = [f"{_listing_label(item)} · 상담일 {item['consulted_date']} · 상담 #{item['consultation_id']}" for item in items]
     chosen = st.selectbox("상세·수정할 상담", labels, key="consultation_target")
     detail = get_consultation_detail(items[labels.index(chosen)]["consultation_id"])

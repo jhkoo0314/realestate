@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
+from services.export_service import create_contract_excel, make_management_export_filename
 from storage.contract_repository import get_contracts
 from storage.listing_repository import search_listing_rounds
 
@@ -134,6 +135,22 @@ def _render_contract_lookup() -> None:
         st.caption(f"조회된 계약 {len(contracts)}건")
         if contracts:
             st.dataframe(_contract_rows(contracts), width="stretch", hide_index=True)
+            st.markdown("##### 엑셀 내보내기")
+            st.caption(f"현재 조회 결과 {len(contracts)}건을 내보냅니다.")
+            st.warning("내부 업무용 파일입니다. 계약자 연락처는 포함하지 않으며, 외부에 공유하지 마세요.")
+            try:
+                export_data = create_contract_excel(contracts)
+            except Exception as error:
+                st.error(f"엑셀 파일을 만들지 못했습니다. ({error})")
+            else:
+                st.download_button(
+                    "계약 조회 결과 엑셀 내려받기",
+                    data=export_data,
+                    file_name=make_management_export_filename("계약목록"),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    key="contract_excel_download",
+                )
         else:
             st.info("조건에 맞는 계약 기록이 없습니다.")
     _render_status_change(contracts)

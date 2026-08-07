@@ -9,15 +9,24 @@ from typing import Any
 from storage.database import DATABASE_PATH, ensure_database_schema, get_connection
 
 
-def get_consultations(*, query: str = "", statuses: list[str] | None = None, due_only: bool = False, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+def get_consultations(*, query: str = "", categories: list[str] | None = None, statuses: list[str] | None = None, consulted_start: str | None = None, consulted_end: str | None = None, due_only: bool = False, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     ensure_database_schema(path)
     conditions, parameters = ["(c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))"], []
     if keyword := query.strip():
         conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.desired_area LIKE ?)")
         parameters.extend([f"%{keyword}%"] * 4)
+    if categories:
+        conditions.append(f"c.consultation_category IN ({', '.join('?' for _ in categories)})")
+        parameters.extend(categories)
     if statuses:
         conditions.append(f"c.consultation_status IN ({', '.join('?' for _ in statuses)})")
         parameters.extend(statuses)
+    if consulted_start:
+        conditions.append("c.consulted_date >= ?")
+        parameters.append(consulted_start)
+    if consulted_end:
+        conditions.append("c.consulted_date <= ?")
+        parameters.append(consulted_end)
     if due_only:
         conditions.extend(["c.next_contact_date IS NOT NULL", "c.next_contact_date <= ?", "c.consultation_status != '종료'"])
         parameters.append(date.today().isoformat())
