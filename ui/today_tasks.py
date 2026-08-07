@@ -12,14 +12,17 @@ from services.today_task_service import get_today_tasks
 def _render_group(title: str, rows: list[dict[str, str]], empty_message: str) -> None:
     st.markdown(f"#### {title} · {len(rows)}건")
     if rows:
-        st.dataframe([{key: value for key, value in row.items() if key != "kind"} for row in rows], width="stretch", hide_index=True)
+        hidden_columns = {"kind"}
+        if title == "상시 확인 필요":
+            hidden_columns.add("기한")
+        st.dataframe([{key: value for key, value in row.items() if key not in hidden_columns} for row in rows], width="stretch", hide_index=True)
     else:
         st.info(empty_message)
 
 
 def render_today_tasks() -> None:
     st.subheader("오늘 할 일")
-    st.markdown("<p class='section-note'>매물·건물·계약·상담 기록에서 기준일 업무를 다시 계산합니다. 이 화면에서 완료 처리나 별도 업무 기록을 만들지는 않습니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='section-note'>매물·계약·상담 기록에서 기준일 업무를 다시 계산합니다. 이 화면에서 완료 처리나 별도 업무 기록을 만들지는 않습니다.</p>", unsafe_allow_html=True)
     reference_date = st.date_input("기준일", value=date.today(), key="today_tasks_reference_date")
     try:
         tasks = get_today_tasks(reference_date)

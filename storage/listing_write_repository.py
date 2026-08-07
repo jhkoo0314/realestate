@@ -53,10 +53,12 @@ def delete_listing(listing_id: int, path: Path = DATABASE_PATH) -> dict[str, int
                 raise ValueError("삭제할 매물을 찾을 수 없습니다.")
             consultation_count = connection.execute("SELECT COUNT(*) FROM consultations WHERE listing_id=?", (listing_id,)).fetchone()[0]
             contract_count = connection.execute("SELECT COUNT(*) FROM contracts WHERE listing_id=?", (listing_id,)).fetchone()[0]
+            advertisement_count = connection.execute("SELECT COUNT(*) FROM listing_advertisements WHERE listing_id=?", (listing_id,)).fetchone()[0]
             connection.execute("DELETE FROM consultations WHERE listing_id=?", (listing_id,))
             connection.execute("DELETE FROM contracts WHERE listing_id=?", (listing_id,))
+            connection.execute("DELETE FROM listing_advertisements WHERE listing_id=?", (listing_id,))
             connection.execute("DELETE FROM listings WHERE id=?", (listing_id,))
-            return {"contracts": contract_count, "consultations": consultation_count}
+            return {"contracts": contract_count, "consultations": consultation_count, "advertisements": advertisement_count}
     finally: connection.close()
 
 
@@ -81,6 +83,7 @@ def delete_unit(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, int]:
         with connection:
             connection.execute("DELETE FROM consultations WHERE listing_id IN (SELECT id FROM listings WHERE unit_id=?)", (unit_id,))
             connection.execute("DELETE FROM contracts WHERE listing_id IN (SELECT id FROM listings WHERE unit_id=?)", (unit_id,))
+            connection.execute("DELETE FROM listing_advertisements WHERE listing_id IN (SELECT id FROM listings WHERE unit_id=?)", (unit_id,))
             connection.execute("DELETE FROM listings WHERE unit_id=?", (unit_id,))
             if connection.execute("DELETE FROM units WHERE id=?", (unit_id,)).rowcount != 1:
                 raise ValueError("호실을 삭제하지 못했습니다.")

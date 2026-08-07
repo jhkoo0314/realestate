@@ -156,7 +156,7 @@ def _render_quick_edit(selected: dict) -> None:
             except Exception as error:
                 st.error(f"매물을 삭제하지 못했습니다. ({error})")
                 return
-            st.success(f"매물을 삭제했습니다. 연결된 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건도 함께 삭제했습니다.")
+            st.success(f"매물을 삭제했습니다. 연결된 계약 {deleted['contracts']}건, 상담 {deleted['consultations']}건, 광고 현황 {deleted.get('advertisements', 0)}건도 함께 삭제했습니다.")
             st.rerun()
 
 

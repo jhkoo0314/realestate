@@ -8,7 +8,7 @@ from typing import Any
 from services.contract_schedule_service import get_contract_schedule
 from storage.consultation_repository import get_consultations
 from storage.listing_repository import get_current_listings
-from storage.database import DATABASE_PATH, ensure_database_schema, get_connection
+from storage.database import DATABASE_PATH
 
 
 def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], status: str, kind: str) -> dict[str, str]:
@@ -39,17 +39,6 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
         for task in listing["tasks"]:
             if task != "재확인 필요":
                 result["상시 확인 필요"].append(_row("매물", task, None, listing, listing["listing_status"], "상시 확인 필요"))
-
-    ensure_database_schema(path)
-    connection = get_connection(path)
-    try:
-        buildings = connection.execute("SELECT building_name, lot_address, next_check_date, info_status FROM buildings WHERE is_active=1 AND next_check_date IS NOT NULL AND next_check_date <= ?", (today_text,)).fetchall()
-    finally:
-        connection.close()
-    for building in buildings:
-        item = dict(building)
-        bucket = "오늘" if item["next_check_date"] == today_text else "지연"
-        result[bucket].append(_row("건물", "건물 정보 재확인", item["next_check_date"], item, item["info_status"], bucket))
 
     for consultation in get_consultations(path=path):
         due_date = consultation.get("next_contact_date")

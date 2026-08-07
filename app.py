@@ -4,6 +4,7 @@ import streamlit as st
 
 from services.backup_service import get_backup_status
 from ui.building_management import render_building_management
+from ui.advertisement_management import render_advertisement_management
 from ui.contract_management import render_contract_management
 from ui.consultation_management import render_consultation_management
 from ui.dashboard import render_dashboard
@@ -17,7 +18,8 @@ PAGE_LISTING = "매물 등록·수정"
 PAGE_BUILDINGS = "건물·호실 관리"
 PAGE_CONTRACTS = "계약관리"
 PAGE_CONSULTATIONS = "상담관리"
-PAGES = [PAGE_TODAY, PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS, PAGE_CONSULTATIONS]
+PAGE_ADVERTISEMENTS = "광고관리"
+PAGES = [PAGE_TODAY, PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS, PAGE_CONSULTATIONS, PAGE_ADVERTISEMENTS]
 
 st.set_page_config(page_title="매물관리", page_icon="🏠", layout="wide", initial_sidebar_state="collapsed")
 
@@ -81,8 +83,10 @@ def main() -> None:
         render_building_management()
     elif st.session_state.selected_page == PAGE_CONTRACTS:
         render_contract_management()
-    else:
+    elif st.session_state.selected_page == PAGE_CONSULTATIONS:
         render_consultation_management()
+    else:
+        render_advertisement_management()
 
 
 if __name__ == "__main__":
