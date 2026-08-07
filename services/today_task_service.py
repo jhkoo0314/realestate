@@ -1,0 +1,66 @@
+"""여러 업무 기록에서 기준일의 할 일을 계산한다. 별도 완료 기록은 만들지 않는다."""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
+
+from services.contract_schedule_service import get_contract_schedule
+from storage.consultation_repository import get_consultations
+from storage.listing_repository import get_current_listings
+from storage.database import DATABASE_PATH, ensure_database_schema, get_connection
+
+
+def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], status: str, kind: str) -> dict[str, str]:
+    return {
+        "업무 구분": source,
+        "해야 할 일": task,
+        "기한": due_date or "조건 확인",
+        "건물명": item.get("building_name") or item.get("건물명") or "-",
+        "지번": item.get("lot_address") or item.get("지번") or "-",
+        "호실": item.get("unit_number") or item.get("호실") or "-",
+        "상태": status,
+        "kind": kind,
+    }
+
+
+def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[dict[str, str]]]:
+    """당일, 지연, 날짜와 무관한 조건 확인 업무를 분리한다."""
+    today_text = reference_date.isoformat()
+    result: dict[str, list[dict[str, str]]] = {"오늘": [], "지연": [], "상시 확인 필요": []}
+
+    for listing in get_current_listings(path=path):
+        if listing["next_check_date"] and listing["next_check_date"] <= today_text:
+            bucket = "오늘" if listing["next_check_date"] == today_text else "지연"
+            result[bucket].append(_row("매물", "매물 재확인", listing["next_check_date"], listing, listing["listing_status"], bucket))
+        if listing["move_out_due_date"] and listing["move_out_due_date"] <= today_text:
+            bucket = "오늘" if listing["move_out_due_date"] == today_text else "지연"
+            result[bucket].append(_row("매물", "퇴실 예정", listing["move_out_due_date"], listing, listing["listing_status"], bucket))
+        for task in listing["tasks"]:
+            if task != "재확인 필요":
+                result["상시 확인 필요"].append(_row("매물", task, None, listing, listing["listing_status"], "상시 확인 필요"))
+
+    ensure_database_schema(path)
+    connection = get_connection(path)
+    try:
+        buildings = connection.execute("SELECT building_name, lot_address, next_check_date, info_status FROM buildings WHERE is_active=1 AND next_check_date IS NOT NULL AND next_check_date <= ?", (today_text,)).fetchall()
+    finally:
+        connection.close()
+    for building in buildings:
+        item = dict(building)
+        bucket = "오늘" if item["next_check_date"] == today_text else "지연"
+        result[bucket].append(_row("건물", "건물 정보 재확인", item["next_check_date"], item, item["info_status"], bucket))
+
+    for consultation in get_consultations(path=path):
+        due_date = consultation.get("next_contact_date")
+        if due_date and due_date <= today_text and consultation["consultation_status"] != "종료":
+            bucket = "오늘" if due_date == today_text else "지연"
+            result[bucket].append(_row("상담", "다음 연락", due_date, consultation, consultation["consultation_status"], bucket))
+
+    for event in get_contract_schedule(reference_date, days=0, path=path):
+        bucket = "오늘" if event["remaining_days"] == 0 else "지연"
+        result[bucket].append(_row("계약", event["일정 종류"], event["예정일"], event, event["계약 상태"], bucket))
+
+    for key in result:
+        result[key].sort(key=lambda item: (item["기한"], item["업무 구분"], item["건물명"], item["호실"]))
+    return result

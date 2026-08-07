@@ -33,6 +33,7 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
     provisional_deposit = raw.get("provisional_deposit_manwon")
     remaining_deposit_due_date = _date_text(raw.get("remaining_deposit_due_date"))
     balance = raw.get("balance_manwon")
+    balance_due_date = _date_text(raw.get("balance_due_date"))
     if contract_type not in CONTRACT_TYPES:
         errors.append("계약 유형을 선택해 주세요.")
     if contract_status not in CONTRACT_STATUSES:
@@ -41,6 +42,10 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
         errors.append("정식 계약일은 계약 진행 시작일보다 빠를 수 없습니다.")
     if progress and remaining_deposit_due_date and remaining_deposit_due_date < progress:
         errors.append("계약금 추가 수령 예정일은 계약 진행 시작일보다 빠를 수 없습니다.")
+    if progress and balance_due_date and balance_due_date < progress:
+        errors.append("잔금 예정일은 계약 진행 시작일보다 빠를 수 없습니다.")
+    if formal and balance_due_date and balance_due_date < formal:
+        errors.append("잔금 예정일은 정식 계약일보다 빠를 수 없습니다.")
     if start and end and end < start:
         errors.append("계약 종료일은 시작일보다 빠를 수 없습니다.")
     if term is not None and term <= 0:
@@ -72,6 +77,7 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
         "provisional_deposit_manwon": int(provisional_deposit) if provisional_deposit is not None else None,
         "remaining_deposit_due_date": remaining_deposit_due_date,
         "balance_manwon": int(balance) if balance is not None else None,
+        "balance_due_date": balance_due_date,
     }, []
 
 

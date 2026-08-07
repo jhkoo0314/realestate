@@ -8,6 +8,7 @@ import streamlit as st
 
 from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
 from services.export_service import create_contract_excel, make_management_export_filename
+from services.contract_schedule_service import expiry_summary, get_contract_schedule
 from storage.contract_repository import get_contracts
 from storage.listing_repository import search_listing_rounds
 
@@ -37,7 +38,7 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
             "기간(개월)": item["term_months"] or "-", "계약금": item["contract_deposit_manwon"] or "-",
             "가계약금": item["provisional_deposit_manwon"] or "-",
             "계약금 미수령": (item["contract_deposit_manwon"] - (item["provisional_deposit_manwon"] or 0)) if item["contract_deposit_manwon"] is not None else "-",
-            "추가 수령 예정일": item["remaining_deposit_due_date"] or "-", "잔금": item["balance_manwon"] or "-", "계약 상태": item["contract_status"],
+            "추가 수령 예정일": item["remaining_deposit_due_date"] or "-", "잔금": item["balance_manwon"] or "-", "잔금 예정일": item["balance_due_date"] or "-", "계약 상태": item["contract_status"],
             "메모": item["contract_note"] or "-",
         })
     return rows
@@ -62,18 +63,25 @@ def _render_status_change(contracts: list[dict]) -> None:
     with right:
         start_date = st.date_input("임대차 시작일", value=date.fromisoformat(selected["contract_start_date"]) if selected["contract_start_date"] else None, key=f"contract_start_{selected['contract_id']}")
         end_date = st.date_input("임대차 종료일", value=date.fromisoformat(selected["contract_end_date"]) if selected["contract_end_date"] else None, key=f"contract_end_{selected['contract_id']}")
-    detail_left, detail_middle, detail_right = st.columns(3)
+    detail_left, detail_middle, _ = st.columns(3)
     with detail_left:
         contact = st.text_input("계약자 연락처 (내부정보)", value=selected["contractor_contact"] or "", key=f"contract_contact_{selected['contract_id']}")
     with detail_middle:
         term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=selected["term_months"], key=f"contract_term_{selected['contract_id']}")
-    with detail_right:
+    payment_left, payment_middle, payment_right = st.columns(3)
+    with payment_left:
         deposit = st.number_input("계약금 전체 (만원)", min_value=0, step=10, value=selected["contract_deposit_manwon"], key=f"contract_deposit_{selected['contract_id']}")
+    with payment_middle:
         provisional_deposit = st.number_input("가계약금 수령액 (만원)", min_value=0, step=10, value=selected["provisional_deposit_manwon"], key=f"contract_provisional_deposit_{selected['contract_id']}")
+    with payment_right:
         remaining_deposit_due = st.date_input("계약금 추가 수령 예정일", value=date.fromisoformat(selected["remaining_deposit_due_date"]) if selected["remaining_deposit_due_date"] else None, key=f"contract_remaining_deposit_due_{selected['contract_id']}")
-        if deposit is not None:
-            st.caption(f"계약금 미수령: {max(deposit - (provisional_deposit or 0), 0):,}만원")
+    if deposit is not None:
+        st.caption(f"계약금 미수령: {max(deposit - (provisional_deposit or 0), 0):,}만원")
+    balance_left, balance_middle, _ = st.columns(3)
+    with balance_left:
         balance = st.number_input("잔금 (만원)", min_value=0, step=10, value=selected["balance_manwon"], key=f"contract_balance_{selected['contract_id']}")
+    with balance_middle:
+        balance_due = st.date_input("잔금 예정일", value=date.fromisoformat(selected["balance_due_date"]) if selected["balance_due_date"] else None, key=f"contract_balance_due_{selected['contract_id']}")
     note = st.text_area("계약 메모", value=selected["contract_note"] or "", key=f"contract_note_{selected['contract_id']}")
     if st.button("계약 정보 저장", key=f"contract_status_save_{selected['contract_id']}"):
         try:
@@ -84,6 +92,7 @@ def _render_status_change(contracts: list[dict]) -> None:
                 "contract_note": note, "contractor_contact": contact,
                 "contract_deposit_manwon": deposit, "provisional_deposit_manwon": provisional_deposit,
                 "remaining_deposit_due_date": remaining_deposit_due, "balance_manwon": balance,
+                "balance_due_date": balance_due,
             })
         except ValueError as error:
             st.error(str(error))
@@ -156,6 +165,29 @@ def _render_contract_lookup() -> None:
     _render_status_change(contracts)
 
 
+def _render_contract_schedule() -> None:
+    st.markdown("#### 계약 일정")
+    st.caption("정식 계약·추가 계약금 수령·잔금·임대차 종료의 기준일 이전 미처리 일정과 앞으로 30일 이내 일정을 표시합니다. 계약 진행 시작일은 이력으로만 관리합니다. 연락처·금액·메모는 이 표에 표시하지 않습니다.")
+    reference_date = st.date_input("일정 기준일", value=date.today(), key="contract_schedule_reference_date")
+    try:
+        summary = expiry_summary(reference_date)
+        schedules = get_contract_schedule(reference_date, days=30)
+    except ValueError as error:
+        st.error(str(error))
+        return
+    metrics = st.columns(3)
+    for column, (label, value) in zip(metrics, summary.items()):
+        column.metric(f"임대차 만료 {label}", value)
+    st.caption("만료 요약은 해지·만료 계약과 종료일이 없는 계약을 제외한 누적 수치입니다.")
+    if not schedules:
+        st.info("기준일 이전 미처리 일정 또는 앞으로 30일 이내 일정이 없습니다.")
+        return
+    st.dataframe([
+        {key: value for key, value in item.items() if key not in {"due_date", "remaining_days", "event_type", "is_expiry"}}
+        for item in schedules
+    ], width="stretch", hide_index=True)
+
+
 def _render_contract_registration() -> None:
     st.markdown("#### 계약 등록")
     st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 가계약 진행·정식 계약·임대차 기간을 한 계약 기록에 이어서 관리합니다.")
@@ -190,18 +222,26 @@ def _render_contract_registration() -> None:
             with right:
                 contract_start = st.date_input("임대차 시작일", value=None)
                 contract_end = st.date_input("임대차 종료일", value=None)
-            term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=None)
             contract_note = st.text_area("계약 메모", placeholder="예: 단기 연장 여부 확인 필요")
-            detail_left, detail_right, _ = st.columns(3)
+            detail_left, detail_middle, _ = st.columns(3)
             with detail_left:
                 contractor_contact = st.text_input("계약자 연락처 (내부정보)", placeholder="예: 010-1234-5678")
-            with detail_right:
+            with detail_middle:
+                term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=None)
+            payment_left, payment_middle, payment_right = st.columns(3)
+            with payment_left:
                 contract_deposit = st.number_input("계약금 전체 (만원)", min_value=0, step=10, value=None)
+            with payment_middle:
                 provisional_deposit = st.number_input("가계약금 수령액 (만원)", min_value=0, step=10, value=None)
+            with payment_right:
                 remaining_deposit_due = st.date_input("계약금 추가 수령 예정일", value=None)
-                if contract_deposit is not None:
-                    st.caption(f"계약금 미수령: {max(contract_deposit - (provisional_deposit or 0), 0):,}만원")
+            if contract_deposit is not None:
+                st.caption(f"계약금 미수령: {max(contract_deposit - (provisional_deposit or 0), 0):,}만원")
+            balance_left, balance_middle, _ = st.columns(3)
+            with balance_left:
                 balance = st.number_input("잔금 (만원)", min_value=0, step=10, value=None)
+            with balance_middle:
+                balance_due = st.date_input("잔금 예정일", value=None)
             submitted = st.form_submit_button("새 계약 등록", type="primary")
         if submitted:
             contract, errors = validate_contract({
@@ -212,6 +252,7 @@ def _render_contract_registration() -> None:
                 "contractor_contact": contractor_contact, "contract_deposit_manwon": contract_deposit,
                 "provisional_deposit_manwon": provisional_deposit, "remaining_deposit_due_date": remaining_deposit_due,
                 "balance_manwon": balance,
+                "balance_due_date": balance_due,
             })
             if errors:
                 for error in errors:
@@ -232,11 +273,13 @@ def render_contract_management() -> None:
     st.markdown("<p class='section-note'>계약은 건물·호실이 아니라 계약 당시의 매물 기록에 연결합니다. 계약자 연락처와 계약금·잔금은 내부정보로 관리하며, 결제·계약서 파일은 관리하지 않습니다.</p>", unsafe_allow_html=True)
     mode = st.radio(
         "계약관리 메뉴",
-        ["계약 등록", "계약 조회·수정"],
+        ["계약 등록", "계약 조회·수정", "계약 일정"],
         horizontal=True,
         key="contract_management_mode",
     )
     if mode == "계약 등록":
         _render_contract_registration()
-    else:
+    elif mode == "계약 조회·수정":
         _render_contract_lookup()
+    else:
+        _render_contract_schedule()

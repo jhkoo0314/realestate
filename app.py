@@ -8,14 +8,16 @@ from ui.contract_management import render_contract_management
 from ui.consultation_management import render_consultation_management
 from ui.dashboard import render_dashboard
 from ui.listing_form import render_listing_form, reset_for_new_listing
+from ui.today_tasks import render_today_tasks
 
 
+PAGE_TODAY = "오늘 할 일"
 PAGE_DASHBOARD = "매물 현황 리스트"
 PAGE_LISTING = "매물 등록·수정"
 PAGE_BUILDINGS = "건물·호실 관리"
 PAGE_CONTRACTS = "계약관리"
 PAGE_CONSULTATIONS = "상담관리"
-PAGES = [PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS, PAGE_CONSULTATIONS]
+PAGES = [PAGE_TODAY, PAGE_DASHBOARD, PAGE_LISTING, PAGE_BUILDINGS, PAGE_CONTRACTS, PAGE_CONSULTATIONS]
 
 st.set_page_config(page_title="매물관리", page_icon="🏠", layout="wide", initial_sidebar_state="collapsed")
 
@@ -56,7 +58,7 @@ def render_backup_status() -> None:
 def main() -> None:
     apply_styles()
     if "selected_page" not in st.session_state:
-        st.session_state.selected_page = PAGE_DASHBOARD
+        st.session_state.selected_page = PAGE_TODAY
 
     title_column, action_column = st.columns([4, 1])
     with title_column:
@@ -69,7 +71,9 @@ def main() -> None:
     st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 매물 현황 리스트에서 조회·필터와 확인 업무를 처리할 수 있습니다.</div>", unsafe_allow_html=True)
     render_backup_status()
 
-    if st.session_state.selected_page == PAGE_DASHBOARD:
+    if st.session_state.selected_page == PAGE_TODAY:
+        render_today_tasks()
+    elif st.session_state.selected_page == PAGE_DASHBOARD:
         render_dashboard(go_to_listing)
     elif st.session_state.selected_page == PAGE_LISTING:
         render_listing_form()

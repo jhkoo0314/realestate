@@ -59,6 +59,7 @@ CONTRACT_EXPORT_COLUMNS = [
     ("가계약금 수령액(만원)", "provisional_deposit_manwon", "number"),
     ("계약금 추가 수령 예정일", "remaining_deposit_due_date", "date"),
     ("잔금(만원)", "balance_manwon", "number"),
+    ("잔금 예정일", "balance_due_date", "date"),
     ("계약 메모", "contract_note", "text"),
 ]
 
