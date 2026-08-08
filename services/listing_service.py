@@ -158,7 +158,7 @@ def save_confirmed_existing_building_listing(
     return result
 
 
-def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = True) -> tuple[dict[str, Any] | None, list[str]]:
     """현재 매물 기록이 없는 기존 호실의 첫 현재 매물 조건을 검사한다."""
     errors: list[str] = []
     listing_status = raw.get("listing_status")
@@ -167,7 +167,7 @@ def validate_relisting(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list
     price_mode = raw.get("price_mode")
     deposit = raw.get("deposit_manwon")
     rent = raw.get("monthly_rent_manwon")
-    listing_holder, holder_error = _listing_holder(raw, required=True)
+    listing_holder, holder_error = _listing_holder(raw, required=require_listing_holder)
 
     if not listing_status:
         errors.append("매물 상태를 선택해 주세요.")
@@ -225,7 +225,7 @@ def save_current_listing_for_existing_unit(unit_id: int, listing: dict[str, Any]
 def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """현재 매물의 수정값을 검사한다. 새 회차는 만들지 않는다."""
     raw = {**raw, "price_mode": "새 가격 입력"}
-    listing, errors = validate_relisting(raw)
+    listing, errors = validate_relisting(raw, require_listing_holder=False)
     if errors or listing is None:
         return listing, errors
     listing["last_photo_date"] = _date_text(raw.get("last_photo_date"))

@@ -24,11 +24,16 @@ def _advertisement_rows(items: list[dict]) -> list[dict]:
     } for item in items]
 
 
+def _clear_listing_channel_search() -> None:
+    """광고 채널 연결 대상 매물 검색을 새로 시작한다."""
+    st.session_state.pop("advertisement_listing_query", None)
+    st.session_state.pop("advertisement_selected_listing", None)
+
+
 def _render_listing_advertisements(selected: dict) -> None:
     st.markdown("#### 선택한 매물의 광고 현황")
     st.success(f"선택한 매물: {_listing_label(selected)}")
-    if st.button("다른 매물 선택", key="clear_advertisement_listing"):
-        st.session_state.pop("advertisement_selected_listing", None)
+    if st.button("다른 매물 검색", key="clear_advertisement_listing", on_click=_clear_listing_channel_search):
         st.rerun()
 
     existing = get_advertisements(listing_id=selected["listing_id"])
@@ -150,7 +155,13 @@ def _render_current_advertisements() -> None:
 def _render_advertisement_registration() -> None:
     st.markdown("#### 매물에 광고 채널 연결")
     st.caption("현재 운영 중인 매물 회차를 선택한 뒤, 광고 채널·현재 상태·마지막 확인일만 관리합니다. 매물 조건은 이 화면에서 바꾸지 않습니다.")
-    query = st.text_input("연결할 현재 매물 찾기", key="advertisement_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
+    query_column, reset_column = st.columns([4, 1])
+    with query_column:
+        query = st.text_input("연결할 현재 매물 찾기", key="advertisement_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
+    with reset_column:
+        st.caption(" ")
+        if st.button("검색 초기화", key="advertisement_listing_search_reset", on_click=_clear_listing_channel_search):
+            st.rerun()
     selected = st.session_state.get("advertisement_selected_listing")
     if selected is None:
         if len(query.strip()) < 2:

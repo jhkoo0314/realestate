@@ -77,6 +77,7 @@ CONSULTATION_EXPORT_COLUMNS = [
     ("희망 룸 형태", "desired_room_type", "text"),
     ("희망 보증금(만원)", "desired_deposit_manwon", "number"),
     ("희망 월세(만원)", "desired_monthly_rent_manwon", "number"),
+    ("희망 입주 가능일", "desired_available_from_date", "date"),
     ("다음 연락일", "next_contact_date", "date"),
     ("상담 상태", "consultation_status", "text"),
 ]

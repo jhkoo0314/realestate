@@ -32,6 +32,7 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
     consulted_date, next_contact = _date_text(raw.get("consulted_date")) or date.today().isoformat(), _date_text(raw.get("next_contact_date"))
     category = raw.get("consultation_category", "매물 상담")
     deposit, monthly_rent = raw.get("desired_deposit_manwon"), raw.get("desired_monthly_rent_manwon")
+    desired_available_from_date = _date_text(raw.get("desired_available_from_date"))
     consultation_type = raw.get("consultation_type") if raw.get("consultation_type") in CONSULTATION_TYPES else "기타"
     consultation_status = raw.get("consultation_status") if raw.get("consultation_status") in CONSULTATION_STATUSES else "확인 필요"
     consultation_source = raw.get("consultation_source") if raw.get("consultation_source") in CONSULTATION_SOURCES else "미입력"
@@ -46,6 +47,7 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
         "desired_area": _text(raw.get("desired_area")), "desired_room_type": _text(raw.get("desired_room_type")),
         "desired_deposit_manwon": int(deposit) if deposit is not None else None,
         "desired_monthly_rent_manwon": int(monthly_rent) if monthly_rent is not None else None,
+        "desired_available_from_date": desired_available_from_date,
         "next_contact_date": next_contact, "consultation_status": consultation_status,
     }, []
 

@@ -41,7 +41,7 @@ def _rows(items: list[dict]) -> list[dict]:
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"], "유입 경로": item["consultation_source"] or "-",
         "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
         "해야 할 일": _task_text(item, today),
-        "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_type"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None])) or "-", "상담 내용": item["consultation_note"],
+        "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_type"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None, f"입주 가능일 {item['desired_available_from_date']}" if item.get("desired_available_from_date") else None])) or "-", "상담 내용": item["consultation_note"],
     } for item in items]
 
 
@@ -65,11 +65,12 @@ def _render_registration() -> None:
                 next_contact = st.date_input("다음 연락일", value=None)
                 consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES)
             st.markdown("##### 희망 조건 (선택)")
-            desired_left, desired_middle, desired_right, desired_last = st.columns(4)
+            desired_left, desired_middle, desired_right, desired_last, desired_date_column = st.columns(5)
             with desired_left: desired_area = st.text_input("희망 지역", placeholder="예: 배방읍")
             with desired_middle: desired_room_type = st.text_input("희망 방 형태", placeholder="예: 투룸")
             with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=None)
             with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=None)
+            with desired_date_column: desired_available_from_date = st.date_input("희망 입주 가능일", value=None)
             note = st.text_area("상담 내용", placeholder="예: 원하는 지역·입주 시기·특이사항")
             submitted = st.form_submit_button("일반 상담 등록", type="primary")
         if submitted:
@@ -79,6 +80,7 @@ def _render_registration() -> None:
                 "consulted_date": consulted_date, "consultation_type": consultation_type, "consultation_source": consultation_source, "consultation_note": note,
                 "desired_area": desired_area, "desired_room_type": desired_room_type,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
+                "desired_available_from_date": desired_available_from_date,
                 "next_contact_date": next_contact, "consultation_status": consultation_status,
             })
             if errors:
@@ -125,11 +127,12 @@ def _render_registration() -> None:
             next_contact = st.date_input("다음 연락일", value=None)
             consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES)
         st.markdown("##### 희망 조건 (선택)")
-        desired_left, desired_middle, desired_right, desired_last = st.columns(4)
+        desired_left, desired_middle, desired_right, desired_last, desired_date_column = st.columns(5)
         with desired_left: desired_area = st.text_input("희망 지역", placeholder="예: 배방읍")
         with desired_middle: desired_room_type = st.text_input("희망 방 형태", placeholder="예: 투룸")
         with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=None)
         with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=None)
+        with desired_date_column: desired_available_from_date = st.date_input("희망 입주 가능일", value=None)
         note = st.text_area("상담 내용", placeholder="예: 방문 일정 협의, 가격 안내")
         submitted = st.form_submit_button("새 상담 등록", type="primary")
     if submitted:
@@ -139,6 +142,7 @@ def _render_registration() -> None:
             "consultation_type": consultation_type, "consultation_source": consultation_source, "consultation_note": note,
             "desired_area": desired_area, "desired_room_type": desired_room_type,
             "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
+            "desired_available_from_date": desired_available_from_date,
             "next_contact_date": next_contact, "consultation_status": consultation_status,
         })
         if errors:
@@ -232,17 +236,19 @@ def _render_lookup() -> None:
             status_index = CONSULTATION_STATUSES.index(detail["consultation_status"])
             status = st.selectbox("상담 상태", CONSULTATION_STATUSES, index=status_index)
             next_contact = st.date_input("다음 연락일", value=date.fromisoformat(detail["next_contact_date"]) if detail["next_contact_date"] else None)
+            clear_next_contact = st.checkbox("다음 연락일 지정 취소")
         with right:
             st.caption(f"상담 구분: {detail['consultation_category']}\n\n상담일: {detail['consulted_date']}\n\n상담 종류: {detail['consultation_type']}")
             source_index = CONSULTATION_SOURCES.index(detail["consultation_source"]) if detail["consultation_source"] in CONSULTATION_SOURCES else 0
             consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES, index=source_index)
         note = st.text_area("상담 내용", value=detail["consultation_note"])
         st.markdown("##### 희망 조건 (선택)")
-        desired_left, desired_middle, desired_right, desired_last = st.columns(4)
+        desired_left, desired_middle, desired_right, desired_last, desired_date_column = st.columns(5)
         with desired_left: desired_area = st.text_input("희망 지역", value=detail["desired_area"] or "")
         with desired_middle: desired_room_type = st.text_input("희망 방 형태", value=detail["desired_room_type"] or "")
         with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=detail["desired_deposit_manwon"])
         with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=detail["desired_monthly_rent_manwon"])
+        with desired_date_column: desired_available_from_date = st.date_input("희망 입주 가능일", value=date.fromisoformat(detail["desired_available_from_date"]) if detail["desired_available_from_date"] else None)
         submitted = st.form_submit_button("상담 정보 저장", type="primary")
     if submitted:
         try:
@@ -251,7 +257,8 @@ def _render_lookup() -> None:
                 "consultation_category": detail["consultation_category"], "customer_name": detail["customer_name"], "customer_phone": customer_phone, "consultation_source": consultation_source, "consultation_note": note,
                 "desired_area": desired_area, "desired_room_type": desired_room_type,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
-                "next_contact_date": next_contact, "consultation_status": status,
+                "desired_available_from_date": desired_available_from_date,
+                "next_contact_date": None if clear_next_contact else next_contact, "consultation_status": status,
             })
         except ValueError as error:
             st.error(str(error))
