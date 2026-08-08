@@ -24,6 +24,7 @@ from services.listing_service import (
 )
 from services.contact_format import format_phone_number
 from services.lot_address_service import split_lot_address
+from services.record_number import listing_number
 from storage.building_repository import get_building_units, get_unit_listing_history, search_buildings
 from storage.listing_create_repository import building_has_unit
 from storage.listing_write_repository import deactivate_unit, delete_unit, get_current_listing, get_unit_deletion_summary, get_unit_relisting_context
@@ -336,9 +337,9 @@ def _show_confirmation(pending: dict) -> None:
         if st.button(button_label, type="primary", width="stretch"):
             try:
                 if building_id:
-                    save_confirmed_existing_building_listing(building_id, payload)
+                    _, listing_id = save_confirmed_existing_building_listing(building_id, payload)
                 else:
-                    save_confirmed_first_listing(payload)
+                    _, _, listing_id = save_confirmed_first_listing(payload)
             except Exception as error:
                 st.error(f"저장하지 못했습니다. 입력 내용을 확인해 주세요. ({error})")
                 return
@@ -346,7 +347,7 @@ def _show_confirmation(pending: dict) -> None:
             building_name = payload["building"]["building_name"]
             _clear_registration_inputs()
             _clear_selected_building()
-            st.session_state["registration_success"] = f"{building_name} {unit_number}호가 등록되었습니다."
+            st.session_state["registration_success"] = f"{building_name} {unit_number}호가 등록되었습니다. 매물번호는 {listing_number(listing_id)}입니다."
             st.rerun()
     with edit_column:
         if st.button("입력 계속하기", width="stretch"):
@@ -386,7 +387,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
 
     unit_label = context["unit_number"] if context["unit_number"].endswith("호") else f"{context['unit_number']}호"
     st.markdown("#### 기존 호실 최신 정보 수정")
-    st.info(f"수정 대상: {context['building_name']} · {unit_label} · 최초 접수일 {listing['received_date']}")
+    st.info(f"수정 대상: {listing_number(listing['id'])} · {context['building_name']} · {unit_label} · 최초 접수일 {listing['received_date']}")
     if listing.get("closed_date") or listing.get("listing_status") in ("계약 완료", "종료"):
         st.warning("마지막 매물은 종료 상태입니다. 아래에서 저장하면 종료 상태를 지우고 최신 매물 상태로 바꿉니다.")
     else:
@@ -456,7 +457,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
             return
         _clear_current_listing_inputs()
         st.session_state.pop("selected_registration_unit_id", None)
-        st.success("최신 매물 정보를 저장했습니다. 새 매물 기록은 만들지 않았고, 계약·상담 기록은 유지됩니다.")
+        st.success(f"최신 매물 정보를 저장했습니다. 매물번호 {listing_number(listing['id'])}는 유지되며, 새 매물 기록은 만들지 않았고 계약·상담 기록은 유지됩니다.")
         st.rerun()
 
     with st.expander("이 매물 종료 처리"):
@@ -581,11 +582,11 @@ def _render_relisting_form(unit_id: int) -> None:
                 st.error(error)
             return
         try:
-            save_current_listing_for_existing_unit(unit_id, listing)
+            listing_id = save_current_listing_for_existing_unit(unit_id, listing)
         except Exception as error:
             st.error(f"저장하지 못했습니다. 입력 내용은 유지됩니다. ({error})")
             return
-        st.success(f"{context['building_name']} {unit_label}의 현재 매물 정보가 등록되었습니다.")
+        st.success(f"{context['building_name']} {unit_label}의 현재 매물 정보가 등록되었습니다. 매물번호는 {listing_number(listing_id)}입니다.")
         _clear_relisting_inputs()
         st.session_state.pop("selected_registration_unit_id", None)
         st.rerun()

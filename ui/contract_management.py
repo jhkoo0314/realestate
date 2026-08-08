@@ -9,6 +9,7 @@ import streamlit as st
 from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
 from services.export_service import create_contract_excel, make_management_export_filename
 from services.contract_schedule_service import expiry_summary, get_contract_schedule
+from services.record_number import contract_number, listing_number
 from storage.contract_repository import get_contracts
 from storage.listing_repository import search_listing_rounds
 
@@ -19,7 +20,7 @@ def _date_text(value: date | None) -> str | None:
 
 def _listing_label(item: dict) -> str:
     unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
-    return f"{item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
+    return f"{listing_number(item['listing_id'])} · {item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
 
 
 def _contract_rows(contracts: list[dict]) -> list[dict]:
@@ -32,7 +33,7 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
             if 0 <= days <= 30:
                 remaining = "D-day" if days == 0 else f"{days}일 남음"
         rows.append({
-            "건물명": item["building_name"], "호실": item["unit_number"], "매물 접수일": item["received_date"],
+            "계약번호": contract_number(item["contract_id"]), "매물번호": listing_number(item["listing_id"]), "건물명": item["building_name"], "호실": item["unit_number"], "매물 접수일": item["received_date"],
             "계약 유형": item["contract_type"], "진행 시작일": item["contract_progress_date"] or "-", "정식 계약일": item["formal_contract_date"] or "-",
             "임대차 시작일": item["contract_start_date"] or "-", "임대차 종료일": item["contract_end_date"] or "-", "만료 임박": remaining,
             "기간(개월)": item["term_months"] or "-", "계약금": item["contract_deposit_manwon"] or "-",
@@ -48,7 +49,7 @@ def _render_status_change(contracts: list[dict]) -> None:
     if not contracts:
         return
     st.markdown("#### 저장된 계약 정보 수정")
-    labels = [f"{_listing_label(item)} · 진행 {item['contract_progress_date'] or '-'} · {item['contract_type']}" for item in contracts]
+    labels = [f"{contract_number(item['contract_id'])} · {_listing_label(item)} · 진행 {item['contract_progress_date'] or '-'} · {item['contract_type']}" for item in contracts]
     selected_label = st.selectbox("상태를 변경할 계약", labels, key="contract_status_target")
     selected = contracts[labels.index(selected_label)]
     index = CONTRACT_STATUSES.index(selected["contract_status"]) if selected["contract_status"] in CONTRACT_STATUSES else 0
@@ -119,7 +120,7 @@ def _render_contract_lookup() -> None:
     with st.form("contract_search_form"):
         query_column, status_column, start_column, end_column = st.columns([2, 1, 1, 1])
         with query_column:
-            query = st.text_input("건물명·지번·호수 검색", key="contract_query")
+            query = st.text_input("계약번호·매물번호·건물명·지번·호수 검색", key="contract_query", placeholder="예: C-000042 또는 M-000150")
         with status_column:
             statuses = st.multiselect("계약 상태", CONTRACT_STATUSES, key="contract_status_filter")
         with start_column:
@@ -183,7 +184,7 @@ def _render_contract_schedule() -> None:
         st.info("기준일 이전 미처리 일정 또는 앞으로 30일 이내 일정이 없습니다.")
         return
     st.dataframe([
-        {key: value for key, value in item.items() if key not in {"due_date", "remaining_days", "event_type", "is_expiry"}}
+        {key: value for key, value in item.items() if key not in {"due_date", "remaining_days", "event_type", "is_expiry", "contract_id", "listing_id"}}
         for item in schedules
     ], width="stretch", hide_index=True)
 
@@ -191,7 +192,7 @@ def _render_contract_schedule() -> None:
 def _render_contract_registration() -> None:
     st.markdown("#### 계약 등록")
     st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 가계약 진행·정식 계약·임대차 기간을 한 계약 기록에 이어서 관리합니다.")
-    listing_query = st.text_input("연결할 매물 회차 찾기", key="contract_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
+    listing_query = st.text_input("연결할 매물 회차 찾기", key="contract_listing_query", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
     selected = st.session_state.get("contract_selected_listing")
     if selected is None:
         if len(listing_query.strip()) < 2:
@@ -259,11 +260,11 @@ def _render_contract_registration() -> None:
                     st.error(error)
             else:
                 try:
-                    save_contract(selected["listing_id"], contract)
+                    contract_id = save_contract(selected["listing_id"], contract)
                 except ValueError as error:
                     st.error(str(error))
                 else:
-                    st.success("새 계약 기록을 추가했습니다. 기존 계약과 매물 기록은 변경되지 않았습니다.")
+                    st.success(f"새 계약 기록을 추가했습니다. 계약번호는 {contract_number(contract_id)}, 연결 매물번호는 {listing_number(selected['listing_id'])}입니다. 기존 계약과 매물 기록은 변경되지 않았습니다.")
                     st.session_state.pop("contract_selected_listing", None)
                     st.rerun()
 

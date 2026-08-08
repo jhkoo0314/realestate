@@ -9,11 +9,20 @@ from services.contract_schedule_service import get_contract_schedule
 from storage.consultation_repository import get_consultations
 from storage.listing_repository import get_current_listings
 from storage.database import DATABASE_PATH
+from services.record_number import consultation_number, contract_number, listing_number
 
 
 def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], status: str, kind: str) -> dict[str, str]:
+    listing_id = item.get("listing_id")
+    record_number = {
+        "매물": listing_number(listing_id),
+        "계약": contract_number(item.get("contract_id")),
+        "상담": consultation_number(item.get("consultation_id")),
+    }.get(source, "-")
     return {
         "업무 구분": source,
+        "업무번호": record_number,
+        "연결 매물번호": listing_number(listing_id),
         "해야 할 일": task,
         "기한": due_date or "조건 확인",
         "건물명": item.get("building_name") or item.get("건물명") or "-",

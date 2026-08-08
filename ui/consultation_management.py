@@ -9,6 +9,7 @@ import streamlit as st
 from services.contact_format import format_phone_number
 from services.consultation_service import CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, delete_consultation, link_consultation_to_listing, save_consultation, save_consultation_changes, validate_consultation
 from services.export_service import create_consultation_excel, make_management_export_filename
+from services.record_number import consultation_number, listing_number
 from storage.consultation_repository import get_consultation_detail, get_consultations
 from storage.listing_repository import search_listing_rounds
 
@@ -17,7 +18,7 @@ def _listing_label(item: dict) -> str:
     if not item.get("listing_id"):
         return "일반 상담 · 연결 매물 없음"
     unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
-    return f"{item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
+    return f"{listing_number(item['listing_id'])} · {item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
 
 
 def _date_text(value: date | None) -> str | None:
@@ -37,7 +38,7 @@ def _task_text(item: dict, today: str) -> str:
 def _rows(items: list[dict]) -> list[dict]:
     today = date.today().isoformat()
     return [{
-        "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-",
+        "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-",
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"], "유입 경로": item["consultation_source"] or "-",
         "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
         "해야 할 일": _task_text(item, today),
@@ -87,16 +88,16 @@ def _render_registration() -> None:
                 for error in errors: st.error(error)
                 return
             try:
-                save_consultation(None, consultation)
+                consultation_id = save_consultation(None, consultation)
             except ValueError as error:
                 st.error(str(error))
             else:
-                st.session_state["consultation_registration_notice"] = "일반 상담 등록을 완료했습니다. 상담 조회·수정에서 등록 내용과 해야 할 일을 확인할 수 있습니다."
+                st.session_state["consultation_registration_notice"] = f"일반 상담 등록을 완료했습니다. 상담번호는 {consultation_number(consultation_id)}입니다. 상담 조회·수정에서 등록 내용과 해야 할 일을 확인할 수 있습니다."
                 st.rerun()
         return
 
     st.caption("상담할 당시의 매물 기록을 선택한 뒤 새 상담을 추가합니다.")
-    query = st.text_input("연결할 매물 회차 찾기", key="consultation_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
+    query = st.text_input("연결할 매물 회차 찾기", key="consultation_listing_query", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
     selected = st.session_state.get("consultation_selected_listing")
     if selected is None:
         if len(query.strip()) < 2:
@@ -149,11 +150,11 @@ def _render_registration() -> None:
             for error in errors: st.error(error)
             return
         try:
-            save_consultation(selected["listing_id"], consultation)
+            consultation_id = save_consultation(selected["listing_id"], consultation)
         except ValueError as error:
             st.error(str(error))
         else:
-            st.session_state["consultation_registration_notice"] = "매물 상담 등록을 완료했습니다. 기존 상담과 매물 기록은 변경되지 않았습니다."
+            st.session_state["consultation_registration_notice"] = f"매물 상담 등록을 완료했습니다. 상담번호는 {consultation_number(consultation_id)}, 연결 매물번호는 {listing_number(selected['listing_id'])}입니다. 기존 상담과 매물 기록은 변경되지 않았습니다."
             st.session_state.pop("consultation_selected_listing", None)
             st.rerun()
 
@@ -163,7 +164,7 @@ def _render_lookup() -> None:
     with st.form("consultation_search_form"):
         query_column, category_column, status_column = st.columns([2, 1, 1])
         with query_column:
-            query = st.text_input("건물명·지번·호수·희망 지역 검색", key="consultation_query")
+            query = st.text_input("상담번호·매물번호·건물명·지번·호수·희망 지역 검색", key="consultation_query", placeholder="예: S-000078 또는 M-000150")
         with category_column:
             categories = st.multiselect("상담 구분", CONSULTATION_CATEGORIES, key="consultation_category_filter")
         with status_column:
@@ -202,7 +203,7 @@ def _render_lookup() -> None:
     st.dataframe(_rows(items), width="stretch", hide_index=True)
     st.markdown("##### 엑셀 내보내기")
     st.caption(f"현재 조회 결과 {len(items)}건을 내보냅니다.")
-    st.warning("내부 업무용 파일입니다. 고객 이름·연락처와 상담 내용은 포함하지 않으며, 외부에 공유하지 마세요.")
+    st.warning("고객 연락처가 포함되는 내부 업무용 파일입니다. 고객 이름과 상담 내용은 제외되지만, 외부 공유·개인 기기 보관은 하지 마세요.")
     try:
         export_data = create_consultation_excel(items)
     except Exception as error:
@@ -216,7 +217,7 @@ def _render_lookup() -> None:
             type="primary",
             key="consultation_excel_download",
         )
-    labels = [f"{_listing_label(item)} · 상담일 {item['consulted_date']} · 상담 #{item['consultation_id']}" for item in items]
+    labels = [f"{consultation_number(item['consultation_id'])} · {_listing_label(item)} · 상담일 {item['consulted_date']}" for item in items]
     chosen = st.selectbox("상세·수정할 상담", labels, key="consultation_target")
     detail = get_consultation_detail(items[labels.index(chosen)]["consultation_id"])
     if detail is None:
@@ -269,7 +270,7 @@ def _render_lookup() -> None:
     if detail["consultation_category"] == "일반 상담" and detail["listing_id"] is None:
         with st.expander("이 일반 상담에 매물 연결"):
             st.caption("고객에게 맞는 매물이 정해진 뒤에만 연결합니다. 연결 전까지는 일반 상담으로 유지됩니다.")
-            link_query = st.text_input("연결할 매물 회차 찾기", key=f"general_consultation_link_query_{detail['consultation_id']}", placeholder="건물명·지번·호수 중 2글자 이상")
+            link_query = st.text_input("연결할 매물 회차 찾기", key=f"general_consultation_link_query_{detail['consultation_id']}", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
             if len(link_query.strip()) >= 2:
                 results = search_listing_rounds(link_query)
                 if not results:

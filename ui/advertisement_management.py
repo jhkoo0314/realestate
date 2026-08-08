@@ -7,18 +7,19 @@ from datetime import date
 import streamlit as st
 
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
+from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
 from storage.listing_repository import search_listing_rounds
 
 
 def _listing_label(item: dict) -> str:
     unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
-    return f"{item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
+    return f"{listing_number(item['listing_id'])} · {item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
 
 
 def _advertisement_rows(items: list[dict]) -> list[dict]:
     return [{
-        "건물명": item["building_name"], "지번": item["lot_address"], "호실": item["unit_number"],
+        "매물번호": listing_number(item["listing_id"]), "건물명": item["building_name"], "지번": item["lot_address"], "호실": item["unit_number"],
         "매물 상태": item["listing_status"], "광고 채널": item["advertising_channel"],
         "현재 광고 상태": item["advertising_status"], "마지막 광고 확인일": item["last_checked_date"] or "-",
     } for item in items]
@@ -157,7 +158,7 @@ def _render_advertisement_registration() -> None:
     st.caption("현재 운영 중인 매물 회차를 선택한 뒤, 광고 채널·현재 상태·마지막 확인일만 관리합니다. 매물 조건은 이 화면에서 바꾸지 않습니다.")
     query_column, reset_column = st.columns([4, 1])
     with query_column:
-        query = st.text_input("연결할 현재 매물 찾기", key="advertisement_listing_query", placeholder="건물명·지번·호수 중 2글자 이상")
+        query = st.text_input("연결할 현재 매물 찾기", key="advertisement_listing_query", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
     with reset_column:
         st.caption(" ")
         if st.button("검색 초기화", key="advertisement_listing_search_reset", on_click=_clear_listing_channel_search):

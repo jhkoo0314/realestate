@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from storage.database import DATABASE_PATH, ensure_database_schema, get_connection
+from services.record_number import record_id_from_query
 
 
 def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
@@ -17,6 +18,7 @@ def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[s
         return []
     connection = get_connection(path)
     try:
+        listing_id = record_id_from_query(keyword, "M") or -1
         rows = connection.execute(
             """SELECT l.id AS listing_id, l.received_date, l.listing_status, l.closed_date,
                       b.building_name, b.lot_address, u.unit_number, u.room_type
@@ -25,9 +27,9 @@ def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[s
                JOIN buildings b ON b.id = u.building_id
                WHERE b.is_active = 1 AND u.is_active = 1
                  AND (b.building_name LIKE ? OR b.lot_address LIKE ?
-                      OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)
+                      OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ? OR l.id = ?)
                ORDER BY l.received_date DESC, l.id DESC LIMIT 50""",
-            (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"),
+            (f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", f"%{keyword}%", listing_id),
         ).fetchall()
         return [dict(row) for row in rows]
     finally:
@@ -41,7 +43,7 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
     elif listing_scope == "종료된 매물만":
         conditions.append("(l.closed_date IS NOT NULL OR l.listing_status IN ('계약 완료', '종료'))")
     if keyword := query.strip():
-        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ?)"); parameters.extend([f"%{keyword}%"] * 4)
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR u.unit_number_normalized LIKE ? OR l.id = ?)"); parameters.extend([f"%{keyword}%"] * 4 + [record_id_from_query(keyword, "M") or -1])
     if received_start: conditions.append("l.received_date >= ?"); parameters.append(received_start)
     if received_end: conditions.append("l.received_date <= ?"); parameters.append(received_end)
     if deposit_min is not None: conditions.append("l.deposit_manwon >= ?"); parameters.append(deposit_min)

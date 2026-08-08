@@ -10,9 +10,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from services.lot_address_service import split_lot_address
+from services.record_number import consultation_number, contract_number, listing_number
 
 
 EXPORT_COLUMNS = [
+    ("매물번호", "listing_number", "text"),
     ("접수일", "received_date", "date"),
     ("매물 상태", "listing_status", "text"),
     ("매물 보유처", "listing_holder", "text"),
@@ -45,6 +47,8 @@ EXPORT_COLUMNS = [
 ]
 
 CONTRACT_EXPORT_COLUMNS = [
+    ("계약번호", "contract_number", "text"),
+    ("매물번호", "listing_number", "text"),
     ("건물명", "building_name", "text"),
     ("지번주소", "lot_address", "text"),
     ("호실", "unit_number", "text"),
@@ -65,11 +69,14 @@ CONTRACT_EXPORT_COLUMNS = [
 ]
 
 CONSULTATION_EXPORT_COLUMNS = [
+    ("상담번호", "consultation_number", "text"),
+    ("연결 매물번호", "listing_number", "text"),
     ("건물명", "building_name", "text"),
     ("지번주소", "lot_address", "text"),
     ("호실", "unit_number", "text"),
     ("매물 접수일", "received_date", "date"),
     ("상담 구분", "consultation_category", "text"),
+    ("고객 연락처", "customer_phone", "text"),
     ("상담일", "consulted_date", "date"),
     ("상담 종류", "consultation_type", "text"),
     ("유입 경로", "consultation_source", "text"),
@@ -85,6 +92,8 @@ CONSULTATION_EXPORT_COLUMNS = [
 TODAY_TASK_EXPORT_COLUMNS = [
     ("구분", "구분", "text"),
     ("업무 구분", "업무 구분", "text"),
+    ("업무번호", "업무번호", "text"),
+    ("연결 매물번호", "연결 매물번호", "text"),
     ("해야 할 일", "해야 할 일", "text"),
     ("기한", "기한", "text"),
     ("건물명", "건물명", "text"),
@@ -136,18 +145,20 @@ def create_current_listing_excel(rows: list[dict[str, Any]]) -> bytes:
     export_rows = []
     for row in rows:
         lot_area, lot_number = split_lot_address(row.get("lot_address"))
-        export_rows.append({**row, "lot_area": lot_area, "lot_number": lot_number})
+        export_rows.append({**row, "listing_number": listing_number(row.get("listing_id")), "lot_area": lot_area, "lot_number": lot_number})
     return _create_excel(export_rows, EXPORT_COLUMNS, "현재 매물")
 
 
 def create_contract_excel(rows: list[dict[str, Any]]) -> bytes:
     """계약 조회 결과를 내보낸다. 계약자 연락처는 포함하지 않는다."""
-    return _create_excel(rows, CONTRACT_EXPORT_COLUMNS, "계약 목록")
+    export_rows = [{**row, "contract_number": contract_number(row.get("contract_id")), "listing_number": listing_number(row.get("listing_id"))} for row in rows]
+    return _create_excel(export_rows, CONTRACT_EXPORT_COLUMNS, "계약 목록")
 
 
 def create_consultation_excel(rows: list[dict[str, Any]]) -> bytes:
-    """상담 조회 결과를 내보낸다. 고객 식별정보와 자유 메모는 포함하지 않는다."""
-    return _create_excel(rows, CONSULTATION_EXPORT_COLUMNS, "상담 목록")
+    """상담 조회 결과를 내부 업무용으로 내보낸다. 고객 연락처는 포함하고 이름·자유 메모는 제외한다."""
+    export_rows = [{**row, "consultation_number": consultation_number(row.get("consultation_id")), "listing_number": listing_number(row.get("listing_id"))} for row in rows]
+    return _create_excel(export_rows, CONSULTATION_EXPORT_COLUMNS, "상담 목록")
 
 
 def create_today_tasks_excel(tasks: dict[str, list[dict[str, Any]]]) -> bytes:

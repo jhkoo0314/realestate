@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from storage.contract_repository import get_contracts
+from services.record_number import contract_number, listing_number
 
 
 SCHEDULE_FIELDS = (
@@ -48,6 +49,10 @@ def get_contract_schedule(reference_date: date, days: int = 30, path: Path | Non
                 continue
             is_expiry = field == "contract_end_date"
             rows.append({
+                "계약번호": contract_number(contract["contract_id"]),
+                "매물번호": listing_number(contract["listing_id"]),
+                "contract_id": contract["contract_id"],
+                "listing_id": contract["listing_id"],
                 "일정 종류": label,
                 "예정일": value,
                 "남은 일수": "지남" if remaining_days < 0 else ("D-day" if remaining_days == 0 else f"{remaining_days}일 남음"),

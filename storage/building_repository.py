@@ -46,7 +46,7 @@ def update_building_management_detail(building_id: int, values: dict[str, Any], 
 def get_building_units(building_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     require_database(path); connection = get_connection(path)
     try:
-        rows = connection.execute("""SELECT u.id, u.unit_number, u.room_type, u.floor_number, u.direction, l.deposit_manwon, l.monthly_rent_manwon, l.listing_status, l.received_date FROM units u LEFT JOIN listings l ON l.id=(SELECT id FROM listings WHERE unit_id=u.id ORDER BY received_date DESC,id DESC LIMIT 1) WHERE u.building_id=? AND u.is_active=1 ORDER BY unit_number_normalized""", (building_id,)).fetchall()
+        rows = connection.execute("""SELECT u.id, u.unit_number, u.room_type, u.floor_number, u.direction, l.id AS listing_id, l.deposit_manwon, l.monthly_rent_manwon, l.listing_status, l.received_date FROM units u LEFT JOIN listings l ON l.id=(SELECT id FROM listings WHERE unit_id=u.id ORDER BY received_date DESC,id DESC LIMIT 1) WHERE u.building_id=? AND u.is_active=1 ORDER BY unit_number_normalized""", (building_id,)).fetchall()
         return [dict(row) for row in rows]
     finally: connection.close()
 

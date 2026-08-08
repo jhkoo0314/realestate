@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from services.record_number import contract_number, listing_number
 from services.listing_service import ROOM_TYPES
 from services.backup_service import create_daily_backup
 from storage.building_repository import (
@@ -211,7 +212,7 @@ def _render_unit_detail(unit_id: int) -> None:
     st.markdown("#### 매물 이력")
     if history:
         rows = [{
-            "접수일": item["received_date"], "상태": item["listing_status"],
+            "매물번호": listing_number(item["id"]), "접수일": item["received_date"], "상태": item["listing_status"],
             "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-", "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-",
             "관리비": item["management_fee_manwon"] or "-", "입주 가능": item["availability_type"],
             "종료일": item["closed_date"] or "-", "종료 사유": item["close_reason"] or "-",
@@ -225,7 +226,7 @@ def _render_unit_detail(unit_id: int) -> None:
     st.markdown("#### 계약 이력")
     if contracts:
         st.dataframe([{
-            "매물 접수일": item["received_date"], "계약 유형": item["contract_type"],
+            "계약번호": contract_number(item["contract_id"]), "매물번호": listing_number(item["listing_id"]), "매물 접수일": item["received_date"], "계약 유형": item["contract_type"],
             "시작일": item["contract_start_date"], "종료일": item["contract_end_date"] or "-",
             "기간(개월)": item["term_months"] or "-", "계약 상태": item["contract_status"],
             "메모": item["contract_note"] or "-",
@@ -269,7 +270,7 @@ def render_building_management() -> None:
         st.info("등록된 호실이 없습니다.")
         return
     st.dataframe([{
-        "호실": item["unit_number"], "룸 형태": item["room_type"] or "미입력", "방향": item["direction"] or "미입력",
+        "호실": item["unit_number"], "최근 매물번호": listing_number(item["listing_id"]), "룸 형태": item["room_type"] or "미입력", "방향": item["direction"] or "미입력",
         "최근 조건": f"{item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}",
         "최근 상태": item["listing_status"] or "-", "마지막 접수일": item["received_date"] or "-",
     } for item in units], width="stretch", hide_index=True)

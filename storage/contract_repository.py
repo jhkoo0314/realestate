@@ -7,14 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from storage.database import DATABASE_PATH, ensure_database_schema, get_connection
+from services.record_number import record_id_from_query
 
 
 def get_contracts(*, query: str = "", statuses: list[str] | None = None, end_start: str | None = None, end_end: str | None = None, expiring_within_days: int | None = None, unit_id: int | None = None, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     ensure_database_schema(path)
     conditions, parameters = ["b.is_active = 1", "u.is_active = 1"], []
     if keyword := query.strip():
-        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ?)")
-        parameters.extend([f"%{keyword}%"] * 3)
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.id = ? OR c.listing_id = ?)")
+        parameters.extend([f"%{keyword}%"] * 3 + [record_id_from_query(keyword, "C") or -1, record_id_from_query(keyword, "M") or -1])
     if statuses:
         conditions.append(f"c.contract_status IN ({', '.join('?' for _ in statuses)})")
         parameters.extend(statuses)

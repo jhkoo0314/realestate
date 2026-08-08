@@ -23,7 +23,7 @@ def _render_group(title: str, rows: list[dict[str, str]], empty_message: str) ->
 
 def render_today_tasks() -> None:
     st.subheader("오늘 할 일")
-    st.markdown("<p class='section-note'>매물·계약·상담 기록에서 기준일 업무를 다시 계산합니다. 이 화면에서 완료 처리나 별도 업무 기록을 만들지는 않습니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='section-note'>매물·계약·상담 기록에서 기준일 업무를 다시 계산합니다. 업무번호와 연결 매물번호로 원본 기록을 구분하며, 이 화면에서 완료 처리나 별도 업무 기록을 만들지는 않습니다.</p>", unsafe_allow_html=True)
     reference_date = st.date_input("기준일", value=date.today(), key="today_tasks_reference_date")
     try:
         tasks = get_today_tasks(reference_date)
