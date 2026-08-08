@@ -10,6 +10,7 @@ from storage.consultation_repository import get_consultations
 from storage.listing_repository import get_current_listings
 from storage.database import DATABASE_PATH
 from services.record_number import consultation_number, contract_number, listing_number
+from storage.today_task_completion_repository import get_completed_task_keys
 
 
 def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], status: str, kind: str) -> dict[str, str]:
@@ -19,6 +20,8 @@ def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], sta
         "계약": contract_number(item.get("contract_id")),
         "상담": consultation_number(item.get("consultation_id")),
     }.get(source, "-")
+    record_id = {"매물": listing_id, "계약": item.get("contract_id"), "상담": item.get("consultation_id")}.get(source)
+    task_key = f"{source}:{record_id}:{task}:{due_date or '조건확인'}"
     return {
         "업무 구분": source,
         "업무번호": record_number,
@@ -29,6 +32,8 @@ def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], sta
         "지번": item.get("lot_address") or item.get("지번") or "-",
         "호실": item.get("unit_number") or item.get("호실") or "-",
         "상태": status,
+        "task_key": task_key,
+        "source_record_id": record_id,
         "kind": kind,
     }
 
@@ -61,4 +66,9 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
 
     for key in result:
         result[key].sort(key=lambda item: (item["기한"], item["업무 구분"], item["건물명"], item["호실"]))
+    completed_keys = get_completed_task_keys([item["task_key"] for rows in result.values() for item in rows], path=path)
+    for rows in result.values():
+        for item in rows:
+            item["is_completed"] = item["task_key"] in completed_keys
+            item["완료"] = "완료" if item["is_completed"] else "미완료"
     return result

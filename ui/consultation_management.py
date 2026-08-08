@@ -177,7 +177,9 @@ def _render_lookup() -> None:
         with due_column:
             due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
         searched = st.form_submit_button("상담 조회", type="primary")
-    if searched: st.session_state["consultation_has_searched"] = True
+    if searched:
+        st.session_state["consultation_has_searched"] = True
+        st.session_state.pop("consultation_edit_target_id", None)
     if consulted_start and consulted_end and consulted_end < consulted_start:
         st.error("상담일 종료는 시작일보다 빠를 수 없습니다.")
         return
@@ -198,6 +200,9 @@ def _render_lookup() -> None:
         st.caption(f"적용 중인 상담일 기간: {start_label} ~ {end_label}")
     st.caption(f"조회된 상담 {len(items)}건")
     if not items:
+        if st.session_state.pop("consultation_edit_target_id", None) is not None:
+            st.warning("바로 열려던 상담 기록을 찾을 수 없습니다.")
+            return
         st.info("조건에 맞는 상담 기록이 없습니다.")
         return
     st.dataframe(_rows(items), width="stretch", hide_index=True)
@@ -217,13 +222,26 @@ def _render_lookup() -> None:
             type="primary",
             key="consultation_excel_download",
         )
+    st.markdown("##### 상담 상세·수정")
     labels = [f"{consultation_number(item['consultation_id'])} · {_listing_label(item)} · 상담일 {item['consulted_date']}" for item in items]
-    chosen = st.selectbox("상세·수정할 상담", labels, key="consultation_target")
-    detail = get_consultation_detail(items[labels.index(chosen)]["consultation_id"])
+    chosen = st.selectbox("수정할 상담 선택", labels, key="consultation_edit_select")
+    chosen_item = items[labels.index(chosen)]
+    if st.button("선택한 상담 상세·수정 열기", key="consultation_edit_open", type="secondary"):
+        st.session_state["consultation_edit_target_id"] = chosen_item["consultation_id"]
+        st.rerun()
+    target_id = st.session_state.get("consultation_edit_target_id")
+    if target_id is None:
+        return
+    detail = get_consultation_detail(target_id)
     if detail is None:
+        st.session_state.pop("consultation_edit_target_id", None)
         st.error("선택한 상담 기록을 찾을 수 없습니다.")
         return
     st.markdown("#### 상담 상세·수정")
+    st.caption(f"수정 대상: {consultation_number(detail['consultation_id'])} · 연결 매물번호 {listing_number(detail['listing_id'])}")
+    if st.button("상세·수정 닫기", key=f"consultation_edit_close_{detail['consultation_id']}"):
+        st.session_state.pop("consultation_edit_target_id", None)
+        st.rerun()
     phone_key = f"show_consultation_phone_{detail['consultation_id']}"
     if st.button("연락처 보기", key=f"consultation_phone_button_{detail['consultation_id']}"):
         st.session_state[phone_key] = True

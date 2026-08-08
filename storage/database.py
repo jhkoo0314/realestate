@@ -19,12 +19,14 @@ CREATE TABLE IF NOT EXISTS listings (id INTEGER PRIMARY KEY AUTOINCREMENT, unit_
 CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), contract_type TEXT NOT NULL, contract_progress_date TEXT, formal_contract_date TEXT, contract_start_date TEXT, contract_end_date TEXT, term_months INTEGER, contract_status TEXT NOT NULL, contract_note TEXT, contractor_contact TEXT, contract_deposit_manwon INTEGER, provisional_deposit_manwon INTEGER, remaining_deposit_due_date TEXT, balance_manwon INTEGER, balance_due_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS consultations (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER REFERENCES listings(id), consultation_category TEXT NOT NULL DEFAULT '매물 상담', customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, consulted_date TEXT NOT NULL, consultation_type TEXT NOT NULL, consultation_source TEXT, consultation_note TEXT NOT NULL, desired_area TEXT, desired_room_type TEXT, desired_deposit_manwon INTEGER, desired_monthly_rent_manwon INTEGER, desired_available_from_date TEXT, next_contact_date TEXT, consultation_status TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS listing_advertisements (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), advertising_channel TEXT NOT NULL COLLATE NOCASE, advertising_status TEXT NOT NULL, last_checked_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(listing_id, advertising_channel));
+CREATE TABLE IF NOT EXISTS today_task_completions (task_key TEXT PRIMARY KEY, completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS buildings_set_updated_at AFTER UPDATE ON buildings FOR EACH ROW BEGIN UPDATE buildings SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS units_set_updated_at AFTER UPDATE ON units FOR EACH ROW BEGIN UPDATE units SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS listings_set_updated_at AFTER UPDATE ON listings FOR EACH ROW BEGIN UPDATE listings SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS contracts_set_updated_at AFTER UPDATE ON contracts FOR EACH ROW BEGIN UPDATE contracts SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS consultations_set_updated_at AFTER UPDATE ON consultations FOR EACH ROW BEGIN UPDATE consultations SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS listing_advertisements_set_updated_at AFTER UPDATE ON listing_advertisements FOR EACH ROW BEGIN UPDATE listing_advertisements SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
+CREATE TRIGGER IF NOT EXISTS today_task_completions_set_updated_at AFTER UPDATE ON today_task_completions FOR EACH ROW BEGIN UPDATE today_task_completions SET updated_at=CURRENT_TIMESTAMP WHERE task_key=OLD.task_key; END;
 """
 
 
@@ -45,6 +47,7 @@ def initialize_database(path: Path = DATABASE_PATH) -> None:
     connection = get_connection(path)
     try:
         with connection:
+            _backup_before_today_task_completion_migration(connection)
             connection.executescript(SCHEMA)
             _ensure_compatibility_columns(connection)
     finally:
@@ -81,6 +84,23 @@ def _ensure_compatibility_columns(connection: sqlite3.Connection) -> None:
                     _backup_before_listing_holder_migration(connection)
                 connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}")
     connection.executescript(SCHEMA)
+
+
+def _backup_before_today_task_completion_migration(connection: sqlite3.Connection) -> None:
+    """운영 DB에 완료 체크 표를 더리기 전 보호 사본을 남긴다."""
+    source_name = next((row[2] for row in connection.execute("PRAGMA database_list") if row[1] == "main"), "")
+    if not source_name or source_name == ":memory:" or Path(source_name).resolve() != DATABASE_PATH.resolve():
+        return
+    if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='today_task_completions'").fetchone():
+        return
+    backup_directory = Path(__file__).resolve().parents[1] / "backups"
+    backup_directory.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_directory / f"real_estate_before_today_task_completion_{datetime.now():%Y%m%d_%H%M%S}.db"
+    destination = sqlite3.connect(backup_path)
+    try:
+        connection.backup(destination)
+    finally:
+        destination.close()
 
 
 def _backup_before_balance_due_date_migration(connection: sqlite3.Connection) -> None:

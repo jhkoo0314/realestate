@@ -100,6 +100,7 @@ TODAY_TASK_EXPORT_COLUMNS = [
     ("지번", "지번", "text"),
     ("호실", "호실", "text"),
     ("상태", "상태", "text"),
+    ("완료", "완료", "text"),
 ]
 
 

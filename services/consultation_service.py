@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation
+from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_status
 from services.backup_service import create_daily_backup
 
 
@@ -63,6 +63,13 @@ def save_consultation_changes(consultation_id: int, values: dict[str, Any]) -> N
     if errors:
         raise ValueError(" ".join(errors))
     update_consultation(consultation_id, consultation)
+    create_daily_backup()
+
+
+def change_consultation_status(consultation_id: int, consultation_status: str) -> None:
+    if consultation_status not in CONSULTATION_STATUSES:
+        raise ValueError("상담 상태를 선택해 주세요.")
+    update_consultation_status(consultation_id, consultation_status)
     create_daily_backup()
 
 

@@ -45,13 +45,12 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
     return rows
 
 
-def _render_status_change(contracts: list[dict]) -> None:
-    if not contracts:
-        return
+def _render_status_change(selected: dict) -> None:
     st.markdown("#### 저장된 계약 정보 수정")
-    labels = [f"{contract_number(item['contract_id'])} · {_listing_label(item)} · 진행 {item['contract_progress_date'] or '-'} · {item['contract_type']}" for item in contracts]
-    selected_label = st.selectbox("상태를 변경할 계약", labels, key="contract_status_target")
-    selected = contracts[labels.index(selected_label)]
+    st.caption(f"수정 대상: {contract_number(selected['contract_id'])} · {_listing_label(selected)}")
+    if st.button("수정 닫기", key=f"contract_edit_close_{selected['contract_id']}"):
+        st.session_state.pop("contract_edit_target_id", None)
+        st.rerun()
     index = CONTRACT_STATUSES.index(selected["contract_status"]) if selected["contract_status"] in CONTRACT_STATUSES else 0
     left, middle, right = st.columns(3)
     with left:
@@ -131,6 +130,7 @@ def _render_contract_lookup() -> None:
         searched = st.form_submit_button("계약 조회", type="primary")
     if searched:
         st.session_state["contract_has_searched"] = True
+        st.session_state.pop("contract_edit_target_id", None)
     if end_start and end_end and end_end < end_start:
         st.error("임대차 종료일 종료는 시작일보다 빠를 수 없습니다.")
         return
@@ -161,9 +161,23 @@ def _render_contract_lookup() -> None:
                     type="primary",
                     key="contract_excel_download",
                 )
+            st.markdown("##### 계약 상세·수정")
+            labels = [f"{contract_number(item['contract_id'])} · {_listing_label(item)} · 진행 {item['contract_progress_date'] or '-'} · {item['contract_type']}" for item in contracts]
+            selected_label = st.selectbox("수정할 계약 선택", labels, key="contract_edit_select")
+            selected = contracts[labels.index(selected_label)]
+            if st.button("선택한 계약 수정 열기", key="contract_edit_open", type="secondary"):
+                st.session_state["contract_edit_target_id"] = selected["contract_id"]
+                st.rerun()
         else:
             st.info("조건에 맞는 계약 기록이 없습니다.")
-    _render_status_change(contracts)
+    target_id = st.session_state.get("contract_edit_target_id")
+    if target_id is not None:
+        selected = next((item for item in contracts if item["contract_id"] == target_id), None)
+        if selected is None:
+            st.session_state.pop("contract_edit_target_id", None)
+            st.warning("바로 열려던 계약 기록을 현재 조회 결과에서 찾을 수 없습니다.")
+        else:
+            _render_status_change(selected)
 
 
 def _render_contract_schedule() -> None:

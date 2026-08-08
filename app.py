@@ -29,6 +29,50 @@ def go_to_listing() -> None:
     st.session_state.selected_page = PAGE_LISTING
 
 
+def apply_task_shortcut() -> None:
+    """오늘 할 일 표의 계약·상담 바로가기를 해당 상세 화면으로 연결한다."""
+    task_type = st.query_params.get("open_task")
+    raw_record_id = st.query_params.get("record_id")
+    if task_type not in {"contract", "consultation"}:
+        return
+    try:
+        record_id = int(str(raw_record_id))
+    except (TypeError, ValueError):
+        record_id = 0
+    if record_id <= 0:
+        st.query_params.clear()
+        return
+
+    if task_type == "contract":
+        st.session_state.selected_page = PAGE_CONTRACTS
+        st.session_state["contract_management_mode"] = "계약 조회·수정"
+        st.session_state["contract_has_searched"] = True
+        st.session_state["contract_edit_target_id"] = record_id
+        for key, value in {
+            "contract_query": "",
+            "contract_status_filter": [],
+            "contract_end_start": None,
+            "contract_end_end": None,
+            "contract_expiring_soon": False,
+        }.items():
+            st.session_state[key] = value
+    else:
+        st.session_state.selected_page = PAGE_CONSULTATIONS
+        st.session_state["consultation_management_mode"] = "상담 조회·수정"
+        st.session_state["consultation_has_searched"] = True
+        st.session_state["consultation_edit_target_id"] = record_id
+        for key, value in {
+            "consultation_query": "",
+            "consultation_category_filter": [],
+            "consultation_status_filter": [],
+            "consultation_start": None,
+            "consultation_end": None,
+            "consultation_due_only": False,
+        }.items():
+            st.session_state[key] = value
+    st.query_params.clear()
+
+
 def apply_styles() -> None:
     st.markdown("""<style>
     header[data-testid="stHeader"] { visibility: hidden; height: 0rem; }
@@ -61,6 +105,7 @@ def main() -> None:
     apply_styles()
     if "selected_page" not in st.session_state:
         st.session_state.selected_page = PAGE_TODAY
+    apply_task_shortcut()
 
     title_column, action_column = st.columns([4, 1])
     with title_column:
