@@ -81,6 +81,16 @@ def update_consultation_status(consultation_id: int, consultation_status: str, p
     finally: connection.close()
 
 
+def update_consultation_follow_up(consultation_id: int, consultation_status: str, next_contact_date: str | None, path: Path = DATABASE_PATH) -> None:
+    """오늘 할 일에서 상담 상태와 다음 연락일을 함께 갱신한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("UPDATE consultations SET consultation_status=?, next_contact_date=? WHERE id=?", (consultation_status, next_contact_date, consultation_id)).rowcount != 1:
+                raise ValueError("수정할 상담 기록을 찾을 수 없습니다.")
+    finally: connection.close()
+
+
 def link_consultation_to_listing(consultation_id: int, listing_id: int, path: Path = DATABASE_PATH) -> None:
     """일반 상담에 나중에 선택한 매물 기록을 연결한다."""
     ensure_database_schema(path); connection = get_connection(path)

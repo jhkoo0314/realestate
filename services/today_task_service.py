@@ -60,7 +60,11 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
             bucket = "오늘" if due_date == today_text else "지연"
             result[bucket].append(_row("상담", "다음 연락", due_date, consultation, consultation["consultation_status"], bucket))
 
-    for event in get_contract_schedule(reference_date, days=0, path=path):
+    for event in get_contract_schedule(reference_date, days=1, path=path):
+        if event["remaining_days"] == 1:
+            if event["일정 종류"] == "잔금 예정":
+                result["오늘"].append(_row("계약", "잔금 예정 (D-1 알림)", event["예정일"], event, event["계약 상태"], "오늘"))
+            continue
         bucket = "오늘" if event["remaining_days"] == 0 else "지연"
         result[bucket].append(_row("계약", event["일정 종류"], event["예정일"], event, event["계약 상태"], bucket))
 

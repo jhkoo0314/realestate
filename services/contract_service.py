@@ -10,7 +10,7 @@ from services.backup_service import create_daily_backup
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
-CONTRACT_STATUSES = ["계약 예정", "계약 진행", "계약 완료", "해지", "만료", "확인 필요"]
+CONTRACT_STATUSES = ["계약 예정", "계약 진행", "잔금 예정", "계약 완료", "해지", "만료", "확인 필요"]
 
 
 def _date_text(value: Any) -> str | None:

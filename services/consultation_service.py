@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_status
+from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_follow_up, update_consultation_status
 from services.backup_service import create_daily_backup
 
 
@@ -70,6 +70,18 @@ def change_consultation_status(consultation_id: int, consultation_status: str) -
     if consultation_status not in CONSULTATION_STATUSES:
         raise ValueError("상담 상태를 선택해 주세요.")
     update_consultation_status(consultation_id, consultation_status)
+    create_daily_backup()
+
+
+def change_consultation_follow_up(consultation_id: int, consultation_status: str, next_contact_date: str | None) -> None:
+    if consultation_status not in CONSULTATION_STATUSES:
+        raise ValueError("상담 상태를 선택해 주세요.")
+    if next_contact_date:
+        try:
+            date.fromisoformat(next_contact_date)
+        except ValueError as error:
+            raise ValueError("다음 연락일 형식이 올바르지 않습니다.") from error
+    update_consultation_follow_up(consultation_id, consultation_status, next_contact_date)
     create_daily_backup()
 
 

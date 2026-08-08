@@ -7,16 +7,13 @@ from typing import Any
 
 import streamlit as st
 
-from services.consultation_service import CONSULTATION_STATUSES, change_consultation_status
+from services.consultation_service import CONSULTATION_STATUSES, change_consultation_follow_up
 from services.contract_service import CONTRACT_STATUSES, change_contract_status
 from services.export_service import create_today_tasks_excel, make_today_tasks_export_filename
 from services.record_number import consultation_number, listing_number
 from services.today_task_completion_service import change_today_task_completion
 from services.today_task_service import get_today_tasks
 from storage.consultation_repository import get_consultation_detail
-
-
-CHANGE_OPTIONS = ["유지"]
 
 
 def _render_consultation_summary(consultation_id: int) -> None:
@@ -36,17 +33,19 @@ def _render_consultation_summary(consultation_id: int) -> None:
     st.write(detail["consultation_note"] or "등록된 상담 내용이 없습니다.")
 
 
-def _base_row(row: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _base_row(row: dict[str, Any], *, include_status: bool, due_label: str = "기한") -> dict[str, Any]:
+    result = {
         "업무번호": row["업무번호"],
         "연결 매물번호": row["연결 매물번호"],
         "해야 할 일": row["해야 할 일"],
-        "기한": row["기한"],
+        due_label: row["기한"],
         "건물명": row["건물명"],
         "지번": row["지번"],
         "호실": row["호실"],
-        "현재 상태": row["상태"],
     }
+    if include_status:
+        result["현재 상태"] = row["상태"]
+    return result
 
 
 def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]], empty_message: str) -> None:
@@ -58,13 +57,14 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
 
     display_rows: list[dict[str, Any]] = []
     for row in rows:
-        display = _base_row(row)
+        display = _base_row(row, include_status=source == "매물", due_label="다음 연락일" if source == "상담" else "기한")
         if source == "계약":
             display["계약 열기"] = f"?open_task=contract&record_id={row['source_record_id']}"
-            display["상태 변경"] = "유지"
+            display["계약 상태"] = row["상태"]
         elif source == "상담":
+            display["다음 연락일"] = date.fromisoformat(row["기한"])
             display["상담 내용 보기"] = False
-            display["상태 변경"] = "유지"
+            display["상담 상태"] = row["상태"]
         display["완료"] = row["is_completed"]
         display_rows.append(display)
 
@@ -74,12 +74,13 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
     }
     if source == "계약":
         column_config["계약 열기"] = st.column_config.LinkColumn("계약 열기", display_text="열기", help="해당 계약 상세·수정 화면을 엽니다.")
-        column_config["상태 변경"] = st.column_config.SelectboxColumn("상태 변경", options=CHANGE_OPTIONS + CONTRACT_STATUSES, help="계약 상태를 바꾸면 연결 매물에도 자동 반영합니다.")
-        editable_columns.add("상태 변경")
+        column_config["계약 상태"] = st.column_config.SelectboxColumn("계약 상태", options=CONTRACT_STATUSES, help="변경하면 연결 매물에도 자동 반영합니다.")
+        editable_columns.add("계약 상태")
     elif source == "상담":
+        column_config["다음 연락일"] = st.column_config.DateColumn("다음 연락일", help="변경하면 원본 상담의 다음 연락일과 오늘 할 일이 함께 바뀝니다.")
         column_config["상담 내용 보기"] = st.column_config.CheckboxColumn("상담 내용 보기", help="선택한 상담의 내용과 고객 연락처를 표 아래에 표시합니다.")
-        column_config["상태 변경"] = st.column_config.SelectboxColumn("상태 변경", options=CHANGE_OPTIONS + CONSULTATION_STATUSES, help="선택한 상담 기록의 상태만 변경합니다.")
-        editable_columns.update({"상담 내용 보기", "상태 변경"})
+        column_config["상담 상태"] = st.column_config.SelectboxColumn("상담 상태", options=CONSULTATION_STATUSES, help="선택한 상담 기록의 상태만 변경합니다.")
+        editable_columns.update({"다음 연락일", "상담 내용 보기", "상담 상태"})
 
     edited = st.data_editor(
         display_rows,
@@ -93,14 +94,22 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
     selected_consultation_id: int | None = None
     changed = False
     for row, edited_row in zip(rows, edited_rows):
-        requested_status = edited_row.get("상태 변경", "유지")
+        status_column = "계약 상태" if source == "계약" else "상담 상태" if source == "상담" else None
+        requested_status = edited_row.get(status_column) if status_column else None
         try:
-            if requested_status != "유지" and requested_status != row["상태"]:
+            if requested_status and requested_status != row["상태"]:
                 if source == "계약":
                     change_contract_status(row["source_record_id"], requested_status)
-                elif source == "상담":
-                    change_consultation_status(row["source_record_id"], requested_status)
                 changed = True
+            if source == "상담":
+                requested_date = edited_row.get("다음 연락일")
+                date_text = str(requested_date).strip() if requested_date is not None else ""
+                next_contact_date = requested_date.isoformat() if isinstance(requested_date, date) else date_text[:10] if date_text not in ("", "NaT", "None") else None
+                if requested_status == "종료":
+                    next_contact_date = None
+                if requested_status != row["상태"] or next_contact_date != row["기한"]:
+                    change_consultation_follow_up(row["source_record_id"], requested_status, next_contact_date)
+                    changed = True
             if bool(edited_row["완료"]) != row["is_completed"]:
                 change_today_task_completion(row["task_key"], bool(edited_row["완료"]))
                 changed = True

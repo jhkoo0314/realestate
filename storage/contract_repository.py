@@ -12,7 +12,7 @@ from services.record_number import record_id_from_query
 
 def _apply_linked_listing_status(connection, listing_id: int, contract_status: str) -> None:
     """계약 상태가 바뀔 때만 연결 매물의 현재 상태를 안전하게 반영한다."""
-    if contract_status == "계약 진행":
+    if contract_status in ("계약 진행", "잔금 예정"):
         connection.execute("UPDATE listings SET listing_status='계약 진행 중' WHERE id=? AND closed_date IS NULL AND listing_status NOT IN ('계약 완료', '종료')", (listing_id,))
     elif contract_status == "계약 완료":
         connection.execute("UPDATE listings SET listing_status='계약 완료', closed_date=?, close_reason='계약 완료' WHERE id=? AND closed_date IS NULL", (date.today().isoformat(), listing_id))
