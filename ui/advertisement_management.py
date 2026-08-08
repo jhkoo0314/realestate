@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from services.advertisement_copy_service import FEATURE_SENTENCES, REGION_SENTENCES, ROOM_TITLE_TEMPLATES, ROOM_TYPES, generate_ad_copy, parse_amount, templates_for_room_type
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
 from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
@@ -180,11 +181,116 @@ def _render_advertisement_registration() -> None:
         _render_listing_advertisements(selected)
 
 
+def _render_ad_copy_generator() -> None:
+    """매물 DB 저장 없이 조건을 직접 입력해 광고 문구를 만든다."""
+    st.markdown("#### 광고 문구 만들기")
+    st.caption("매물 등록이나 광고 채널 연결 없이 조건만 직접 입력해 문구를 만듭니다. 생성 문구는 저장되지 않습니다.")
+
+    left, middle, right = st.columns(3)
+    with left:
+        region = st.selectbox("핵심 지역 선택", ["직접 입력", *REGION_SENTENCES], key="ad_copy_region")
+        location = st.text_input("지역 또는 지번 (선택)", placeholder="예: 북수리 1234", key="ad_copy_location")
+    with middle:
+        room_type = st.selectbox("방 형태", ROOM_TYPES, key="ad_copy_room_type")
+        available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
+    with right:
+        deposit_text = st.text_input("보증금 (만원)", placeholder="예: 300", key="ad_copy_deposit")
+        rent_text = st.text_input("월세 (만원)", placeholder="예: 55", key="ad_copy_rent")
+
+    title_family = "원룸" if room_type == "원룸" else "투룸"
+    title_template = st.selectbox(
+        "광고 제목 한 줄 템플릿 (선택)",
+        ["직접 입력", *ROOM_TITLE_TEMPLATES[title_family]],
+        key=f"ad_copy_title_template_{title_family}",
+    )
+    if title_template != "직접 입력":
+        st.caption("선택한 문구가 제목으로 그대로 사용됩니다. 실매물·즉시 입주·채광·도보권 등 사실 확인이 필요한 표현은 확인된 매물에만 선택해 주세요.")
+
+    template_choices = templates_for_room_type(room_type)
+    selected_template = st.selectbox("광고 템플릿", template_choices, key="ad_copy_template")
+    st.markdown("##### 광고 강조 포인트 (2~5개 권장)")
+    feature_columns = st.columns(4)
+    selected_features: list[str] = []
+    for index, feature in enumerate(FEATURE_SENTENCES):
+        with feature_columns[index % len(feature_columns)]:
+            if st.checkbox(feature, key=f"ad_copy_feature_{feature}"):
+                selected_features.append(feature)
+
+    selected_region_sentences: list[str] = []
+    if region != "직접 입력":
+        st.markdown("##### 지역 생활권 강조 (선택 · 실제 매물 위치 확인 후 여러 개 선택 가능)")
+        region_columns = st.columns(2)
+        for index, sentence in enumerate(REGION_SENTENCES[region]):
+            with region_columns[index % len(region_columns)]:
+                if st.checkbox(sentence, key=f"ad_copy_region_sentence_{region}_{index}"):
+                    selected_region_sentences.append(sentence)
+        st.caption("선택한 문구는 모두 본문의 `교통 & 생활`에 들어갑니다. 거리·도보시간은 매물마다 다르므로 실제 위치를 확인한 경우에만 선택해 주세요.")
+
+    transit_living_text = st.text_area(
+        "교통·생활 장점 (선택 · 확인된 내용만 줄마다 입력)",
+        placeholder="예: 1호선 배방역 도보 약 10분대\n가까운 거리의 버스정류장\n편의점 도보 1분권",
+        key="ad_copy_transit_living_text",
+        height=80,
+    )
+    additional_text = st.text_area(
+        "추가 핵심 포인트 (선택 · 확인된 내용만 줄마다 입력)",
+        placeholder="예: 안방이 넓음\n작은방에도 창 있음",
+        key="ad_copy_additional_text",
+        height=80,
+    )
+    notice_left, notice_right = st.columns(2)
+    with notice_left:
+        actual_listing_checked = st.checkbox("실매물 확인됨 — ‘본 매물은 실매물입니다’ 포함", key="ad_copy_actual_listing")
+    with notice_right:
+        actual_photo_checked = st.checkbox("실제 호실 사진 확인됨 — 사진 안내 포함", key="ad_copy_actual_photo")
+    if st.button("광고 문구 생성", type="primary", key="ad_copy_generate"):
+        try:
+            result = generate_ad_copy(
+                room_type=room_type,
+                deposit=parse_amount(deposit_text, "보증금"),
+                rent=parse_amount(rent_text, "월세"),
+                template_name=selected_template,
+                location=location or ("" if region == "직접 입력" else region),
+                title_template="" if title_template == "직접 입력" else title_template,
+                available_date=available_date,
+                selected_features=selected_features,
+                region_sentences=selected_region_sentences,
+                transit_living_text=transit_living_text,
+                additional_text=additional_text,
+                include_actual_listing_notice=actual_listing_checked,
+                include_actual_photo_notice=actual_photo_checked,
+            )
+        except ValueError as error:
+            st.error(str(error))
+        else:
+            st.session_state["ad_copy_result"] = result
+            st.session_state.pop("ad_copy_title_editor", None)
+            st.session_state.pop("ad_copy_body_editor", None)
+
+    result = st.session_state.get("ad_copy_result")
+    if not result:
+        return
+    st.divider()
+    st.markdown("##### 생성 결과")
+    title = st.text_area("광고 제목 수정", value=result["title"], key="ad_copy_title_editor", height=68)
+    body = st.text_area("광고 상세문구 수정", value=result["body"], key="ad_copy_body_editor", height=360)
+    st.caption("각 문구 오른쪽 위 복사 아이콘을 누르면 바로 복사할 수 있습니다.")
+    title_column, body_column = st.columns(2)
+    with title_column:
+        st.markdown("###### 제목 복사")
+        st.code(title, language=None)
+    with body_column:
+        st.markdown("###### 본문 복사")
+        st.code(body, language=None)
+
+
 def render_advertisement_management() -> None:
     st.subheader("광고관리")
     st.markdown("<p class='section-note'>현재 매물 회차에 당근·직방·네이버 등 광고 채널을 복수로 연결하고, 현재 광고 상태만 빠르게 관리합니다.</p>", unsafe_allow_html=True)
-    mode = st.radio("광고관리 메뉴", ["현재 광고 현황", "매물에 광고 채널 연결"], horizontal=True, key="advertisement_management_mode")
+    mode = st.radio("광고관리 메뉴", ["현재 광고 현황", "매물에 광고 채널 연결", "광고 문구 만들기"], horizontal=True, key="advertisement_management_mode")
     if mode == "현재 광고 현황":
         _render_current_advertisements()
-    else:
+    elif mode == "매물에 광고 채널 연결":
         _render_advertisement_registration()
+    else:
+        _render_ad_copy_generator()
