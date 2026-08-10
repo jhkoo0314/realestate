@@ -65,6 +65,8 @@ def apply_task_shortcut() -> None:
             "consultation_query": "",
             "consultation_category_filter": [],
             "consultation_status_filter": [],
+            "consultation_stage_filter": [],
+            "consultation_closed_reason_filter": [],
             "consultation_start": None,
             "consultation_end": None,
             "consultation_due_only": False,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.consultation_repository import create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_follow_up, update_consultation_status
+from storage.consultation_repository import add_consultation_activity, close_legacy_consultation as close_legacy_consultation_record, create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_follow_up, update_consultation_status
 from services.backup_service import create_daily_backup
 
 
@@ -13,6 +13,9 @@ CONSULTATION_TYPES = ["전화", "문자", "방문", "기타"]
 CONSULTATION_STATUSES = ["진행 중", "보류", "종료", "확인 필요"]
 CONSULTATION_CATEGORIES = ["매물 상담", "일반 상담"]
 CONSULTATION_SOURCES = ["미입력", "직방", "다방", "당근", "네이버"]
+PROGRESS_STAGES = ["신규 문의", "조건 확인", "방문 예정", "방문 완료", "검토 중", "계약 진행", "계약 완료", "종료"]
+VISIT_RESULTS = ["만족", "추가 매물 요청", "가격 부담", "조건 불일치", "방문 취소", "기타"]
+CLOSED_REASONS = ["가격", "위치", "입주일", "옵션·구조", "타 매물 계약", "연락 두절", "단순 변심", "기타"]
 
 
 def _text(value: Any) -> str | None:
@@ -36,6 +39,13 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
     consultation_type = raw.get("consultation_type") if raw.get("consultation_type") in CONSULTATION_TYPES else "기타"
     consultation_status = raw.get("consultation_status") if raw.get("consultation_status") in CONSULTATION_STATUSES else "확인 필요"
     consultation_source = raw.get("consultation_source") if raw.get("consultation_source") in CONSULTATION_SOURCES else "미입력"
+    progress_stage = raw.get("progress_stage") if raw.get("progress_stage") in PROGRESS_STAGES else "신규 문의"
+    closed_reason = raw.get("closed_reason") if raw.get("closed_reason") in CLOSED_REASONS else None
+    if progress_stage == "종료" and not closed_reason:
+        errors.append("진행 단계를 종료로 선택하면 종료 사유도 선택해 주세요.")
+    if progress_stage in ("계약 완료", "종료"):
+        consultation_status = "종료"
+        next_contact = None
     if category not in CONSULTATION_CATEGORIES: category = "매물 상담"
     if deposit is not None and deposit < 0: errors.append("희망 보증금은 0 이상의 숫자로 입력해 주세요.")
     if monthly_rent is not None and monthly_rent < 0: errors.append("희망 월세는 0 이상의 숫자로 입력해 주세요.")
@@ -49,6 +59,8 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
         "desired_monthly_rent_manwon": int(monthly_rent) if monthly_rent is not None else None,
         "desired_available_from_date": desired_available_from_date,
         "next_contact_date": next_contact, "consultation_status": consultation_status,
+        "progress_stage": progress_stage, "last_contacted_date": consulted_date, "closed_reason": closed_reason if progress_stage == "종료" else None,
+        "desired_room_types": _text(raw.get("desired_room_types")), "required_features_note": _text(raw.get("required_features_note")),
     }, []
 
 
@@ -94,4 +106,35 @@ def delete_consultation(consultation_id: int) -> None:
 def link_consultation_to_listing(consultation_id: int, listing_id: int) -> None:
     """일반 상담에 나중에 선택한 매물 기록을 연결한다."""
     link_consultation_record(consultation_id, listing_id)
+    create_daily_backup()
+
+
+def validate_consultation_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    errors: list[str] = []
+    activity_date = _date_text(raw.get("activity_date")) or date.today().isoformat()
+    activity_type = raw.get("activity_type") if raw.get("activity_type") in CONSULTATION_TYPES else None
+    stage = raw.get("stage_after_activity") if raw.get("stage_after_activity") in PROGRESS_STAGES else None
+    visit_result = raw.get("visit_result") if raw.get("visit_result") in VISIT_RESULTS else None
+    closed_reason = raw.get("closed_reason") if raw.get("closed_reason") in CLOSED_REASONS else None
+    next_contact_date = _date_text(raw.get("next_contact_date"))
+    if not activity_type: errors.append("상담 방식을 선택해 주세요.")
+    if not stage: errors.append("결과 단계를 선택해 주세요.")
+    if stage == "종료" and not closed_reason: errors.append("종료 사유를 선택해 주세요.")
+    if stage in ("계약 완료", "종료"):
+        next_contact_date = None
+    if errors:
+        return None, errors
+    return {"activity_date": activity_date, "activity_type": activity_type, "activity_note": _text(raw.get("activity_note")), "stage_after_activity": stage, "visit_result": visit_result, "closed_reason": closed_reason if stage == "종료" else None, "next_contact_date": next_contact_date, "consultation_status": "종료" if stage in ("계약 완료", "종료") else "진행 중"}, []
+
+
+def save_consultation_activity(consultation_id: int, activity: dict[str, Any]) -> int:
+    result = add_consultation_activity(consultation_id, activity)
+    create_daily_backup()
+    return result
+
+
+def close_legacy_consultation(consultation_id: int, closed_reason: str) -> None:
+    if closed_reason not in CLOSED_REASONS:
+        raise ValueError("종료 사유를 선택해 주세요.")
+    close_legacy_consultation_record(consultation_id, closed_reason)
     create_daily_backup()
