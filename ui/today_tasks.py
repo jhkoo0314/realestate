@@ -136,9 +136,13 @@ def _render_always_listing_table(rows: list[dict[str, Any]]) -> None:
 
 def _render_date_task_section(title: str, rows: list[dict[str, Any]], empty_message: str) -> None:
     st.markdown(f"#### {title}")
+    if not rows:
+        st.info(empty_message)
+        return
     for source, label in (("매물", "매물 업무"), ("계약", "계약 업무"), ("상담", "상담 업무")):
         source_rows = [row for row in rows if row["업무 구분"] == source]
-        _render_date_task_table(label, source, source_rows, empty_message)
+        if source_rows:
+            _render_date_task_table(label, source, source_rows, empty_message)
 
 
 def render_today_tasks() -> None:
