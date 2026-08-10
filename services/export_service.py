@@ -54,6 +54,7 @@ CONTRACT_EXPORT_COLUMNS = [
     ("호실", "unit_number", "text"),
     ("매물 접수일", "received_date", "date"),
     ("계약 유형", "contract_type", "text"),
+    ("중개 방식", "brokerage_method", "text"),
     ("계약 상태", "contract_status", "text"),
     ("계약 진행 시작일", "contract_progress_date", "date"),
     ("정식 계약일", "formal_contract_date", "date"),

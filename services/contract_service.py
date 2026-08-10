@@ -10,6 +10,7 @@ from services.backup_service import create_daily_backup
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
+BROKERAGE_METHODS = ["단독중개", "공동중개", "확인 필요"]
 CONTRACT_STATUSES = ["계약 예정", "계약 진행", "잔금 예정", "계약 완료", "해지", "만료", "확인 필요"]
 
 
@@ -23,6 +24,7 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
     """계약 진행·정식 계약·임대차 기간을 검사해 저장 가능한 값으로 만든다."""
     errors: list[str] = []
     contract_type = raw.get("contract_type")
+    brokerage_method = raw.get("brokerage_method")
     contract_status = raw.get("contract_status")
     progress = _date_text(raw.get("contract_progress_date"))
     formal = _date_text(raw.get("formal_contract_date"))
@@ -36,6 +38,8 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
     balance_due_date = _date_text(raw.get("balance_due_date"))
     if contract_type not in CONTRACT_TYPES:
         errors.append("계약 유형을 선택해 주세요.")
+    if brokerage_method not in BROKERAGE_METHODS:
+        errors.append("중개 방식을 선택해 주세요.")
     if contract_status not in CONTRACT_STATUSES:
         errors.append("계약 상태를 선택해 주세요.")
     if progress and formal and formal < progress:
@@ -65,6 +69,7 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
     note = str(raw.get("contract_note") or "").strip() or None
     return {
         "contract_type": contract_type,
+        "brokerage_method": brokerage_method,
         "contract_progress_date": progress,
         "formal_contract_date": formal,
         "contract_start_date": start,

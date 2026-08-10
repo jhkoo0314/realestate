@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from services.contract_service import CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
+from services.contract_service import BROKERAGE_METHODS, CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
 from services.export_service import create_contract_excel, make_management_export_filename
 from services.contract_schedule_service import expiry_summary, get_contract_schedule
 from services.record_number import contract_number, listing_number
@@ -34,7 +34,7 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
                 remaining = "D-day" if days == 0 else f"{days}일 남음"
         rows.append({
             "계약번호": contract_number(item["contract_id"]), "매물번호": listing_number(item["listing_id"]), "건물명": item["building_name"], "호실": item["unit_number"], "매물 접수일": item["received_date"],
-            "계약 유형": item["contract_type"], "진행 시작일": item["contract_progress_date"] or "-", "정식 계약일": item["formal_contract_date"] or "-",
+            "계약 유형": item["contract_type"], "중개 방식": item["brokerage_method"] or "-", "진행 시작일": item["contract_progress_date"] or "-", "정식 계약일": item["formal_contract_date"] or "-",
             "임대차 시작일": item["contract_start_date"] or "-", "임대차 종료일": item["contract_end_date"] or "-", "만료 임박": remaining,
             "기간(개월)": item["term_months"] or "-", "계약금": item["contract_deposit_manwon"] or "-",
             "가계약금": item["provisional_deposit_manwon"] or "-",
@@ -56,6 +56,8 @@ def _render_status_change(selected: dict) -> None:
     with left:
         type_index = CONTRACT_TYPES.index(selected["contract_type"]) if selected["contract_type"] in CONTRACT_TYPES else 0
         contract_type = st.selectbox("계약 유형", CONTRACT_TYPES, index=type_index, key=f"contract_type_{selected['contract_id']}")
+        brokerage_index = BROKERAGE_METHODS.index(selected["brokerage_method"]) if selected.get("brokerage_method") in BROKERAGE_METHODS else 2
+        brokerage_method = st.selectbox("중개 방식", BROKERAGE_METHODS, index=brokerage_index, key=f"brokerage_method_{selected['contract_id']}")
         status = st.selectbox("계약 상태", CONTRACT_STATUSES, index=index, key=f"contract_status_{selected['contract_id']}")
     with middle:
         progress_date = st.date_input("계약 진행 시작일", value=date.fromisoformat(selected["contract_progress_date"]) if selected["contract_progress_date"] else None, key=f"contract_progress_{selected['contract_id']}")
@@ -86,7 +88,7 @@ def _render_status_change(selected: dict) -> None:
     if st.button("계약 정보 저장", key=f"contract_status_save_{selected['contract_id']}"):
         try:
             change_contract_details(selected["contract_id"], {
-                "contract_type": contract_type, "contract_status": status,
+                "contract_type": contract_type, "brokerage_method": brokerage_method, "contract_status": status,
                 "contract_progress_date": progress_date, "formal_contract_date": formal_date,
                 "contract_start_date": start_date, "contract_end_date": end_date, "term_months": term_months,
                 "contract_note": note, "contractor_contact": contact,
@@ -230,6 +232,7 @@ def _render_contract_registration() -> None:
             left, middle, right = st.columns(3)
             with left:
                 contract_type = st.selectbox("계약 유형 *", CONTRACT_TYPES)
+                brokerage_method = st.selectbox("중개 방식 *", BROKERAGE_METHODS)
                 contract_status = st.selectbox("계약 상태 *", CONTRACT_STATUSES)
             with middle:
                 contract_progress = st.date_input("계약 진행 시작일", value=date.today())
@@ -260,7 +263,7 @@ def _render_contract_registration() -> None:
             submitted = st.form_submit_button("새 계약 등록", type="primary")
         if submitted:
             contract, errors = validate_contract({
-                "contract_type": contract_type, "contract_status": contract_status, "contract_progress_date": contract_progress,
+                "contract_type": contract_type, "brokerage_method": brokerage_method, "contract_status": contract_status, "contract_progress_date": contract_progress,
                 "formal_contract_date": formal_contract,
                 "contract_start_date": contract_start, "contract_end_date": contract_end,
                 "term_months": term_months, "contract_note": contract_note,

@@ -43,6 +43,7 @@ INPUT_KEYS = [
 UNIT_OPTION_LABELS = ["냉장고", "세탁기", "전자레인지", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
+REGISTRATION_ROOM_TYPES = [room_type for room_type in ROOM_TYPES if room_type != "분리형 원룸"]
 
 
 def _clear_registration_inputs() -> None:
@@ -273,7 +274,7 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     with unit_left:
         st.text_input("호수 *", key="registration_unit_number", placeholder="예: 302")
     with unit_middle:
-        st.selectbox("룸 형태", ROOM_TYPES, key="registration_room_type")
+        st.selectbox("룸 형태", REGISTRATION_ROOM_TYPES, key="registration_room_type")
     with unit_right:
         st.number_input("층", min_value=0, step=1, value=None, key="registration_floor_number")
 

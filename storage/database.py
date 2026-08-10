@@ -16,7 +16,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS buildings (id INTEGER PRIMARY KEY AUTOINCREMENT, building_name TEXT NOT NULL, lot_address TEXT NOT NULL, admin_address TEXT, road_address TEXT, building_alias_note TEXT, common_entrance_password TEXT, has_elevator TEXT, parking_status TEXT, has_cctv TEXT, pet_policy TEXT, move_in_registration_policy TEXT, short_term_policy TEXT, common_fee_note TEXT, building_highlights TEXT, internal_note TEXT, info_status TEXT NOT NULL DEFAULT '기본등록', last_checked_date TEXT, next_check_date TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(building_name, lot_address));
 CREATE TABLE IF NOT EXISTS units (id INTEGER PRIMARY KEY AUTOINCREMENT, building_id INTEGER NOT NULL REFERENCES buildings(id), unit_number TEXT NOT NULL, unit_number_normalized TEXT NOT NULL, floor_number INTEGER, room_type TEXT, is_separated TEXT, direction TEXT, area_status TEXT, exclusive_area_m2 REAL, has_balcony TEXT, has_built_in_closet TEXT, has_double_window TEXT, storage_status TEXT, system_aircon_count INTEGER, unit_options TEXT, unit_highlights TEXT, unit_cautions TEXT, internal_note TEXT, access_method TEXT, unit_access_password TEXT, last_photo_date TEXT, is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(building_id, unit_number_normalized));
 CREATE TABLE IF NOT EXISTS listings (id INTEGER PRIMARY KEY AUTOINCREMENT, unit_id INTEGER NOT NULL REFERENCES units(id), received_date TEXT NOT NULL, listing_status TEXT NOT NULL, closed_date TEXT, close_reason TEXT, deposit_manwon INTEGER, monthly_rent_manwon INTEGER, management_fee_manwon INTEGER, management_fee_note TEXT, availability_type TEXT NOT NULL, available_from_date TEXT, move_out_due_date TEXT, lease_term_note TEXT, short_term_note TEXT, cleaning_status TEXT, wallpaper_status TEXT, repair_status TEXT, photo_status TEXT, has_listing_photos TEXT NOT NULL DEFAULT '확인 필요', ad_status TEXT, ad_channel_note TEXT, listing_holder TEXT, listing_note TEXT, option_change_note TEXT, last_checked_date TEXT, next_check_date TEXT, verification_note TEXT, landlord_contact TEXT, tenant_contact TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), contract_type TEXT NOT NULL, contract_progress_date TEXT, formal_contract_date TEXT, contract_start_date TEXT, contract_end_date TEXT, term_months INTEGER, contract_status TEXT NOT NULL, contract_note TEXT, contractor_contact TEXT, contract_deposit_manwon INTEGER, provisional_deposit_manwon INTEGER, remaining_deposit_due_date TEXT, balance_manwon INTEGER, balance_due_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), contract_type TEXT NOT NULL, brokerage_method TEXT, contract_progress_date TEXT, formal_contract_date TEXT, contract_start_date TEXT, contract_end_date TEXT, term_months INTEGER, contract_status TEXT NOT NULL, contract_note TEXT, contractor_contact TEXT, contract_deposit_manwon INTEGER, provisional_deposit_manwon INTEGER, remaining_deposit_due_date TEXT, balance_manwon INTEGER, balance_due_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS consultations (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER REFERENCES listings(id), consultation_category TEXT NOT NULL DEFAULT '매물 상담', customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, consulted_date TEXT NOT NULL, consultation_type TEXT NOT NULL, consultation_source TEXT, consultation_note TEXT NOT NULL, desired_area TEXT, desired_room_type TEXT, desired_deposit_manwon INTEGER, desired_monthly_rent_manwon INTEGER, desired_available_from_date TEXT, next_contact_date TEXT, consultation_status TEXT NOT NULL, progress_stage TEXT, last_contacted_date TEXT, latest_visit_result TEXT, closed_reason TEXT, desired_room_types TEXT, required_features_note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS consultation_activities (id INTEGER PRIMARY KEY AUTOINCREMENT, consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE, activity_date TEXT NOT NULL, activity_type TEXT NOT NULL, activity_note TEXT, stage_after_activity TEXT NOT NULL, visit_result TEXT, closed_reason TEXT, next_contact_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS listing_advertisements (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), advertising_channel TEXT NOT NULL COLLATE NOCASE, advertising_status TEXT NOT NULL, last_checked_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(listing_id, advertising_channel));
@@ -74,7 +74,7 @@ def _ensure_compatibility_columns(connection: sqlite3.Connection) -> None:
         connection.execute("DROP TABLE consultations_legacy")
     additions = {
         "listings": (("has_listing_photos", "TEXT NOT NULL DEFAULT '확인 필요'"), ("landlord_contact", "TEXT"), ("tenant_contact", "TEXT"), ("listing_holder", "TEXT")),
-        "contracts": (("contract_progress_date", "TEXT"), ("formal_contract_date", "TEXT"), ("contractor_contact", "TEXT"), ("contract_deposit_manwon", "INTEGER"), ("provisional_deposit_manwon", "INTEGER"), ("remaining_deposit_due_date", "TEXT"), ("balance_manwon", "INTEGER"), ("balance_due_date", "TEXT")),
+        "contracts": (("contract_progress_date", "TEXT"), ("formal_contract_date", "TEXT"), ("contractor_contact", "TEXT"), ("contract_deposit_manwon", "INTEGER"), ("provisional_deposit_manwon", "INTEGER"), ("remaining_deposit_due_date", "TEXT"), ("balance_manwon", "INTEGER"), ("balance_due_date", "TEXT"), ("brokerage_method", "TEXT")),
         "consultations": (("consultation_category", "TEXT NOT NULL DEFAULT '매물 상담'"), ("consultation_source", "TEXT"), ("desired_area", "TEXT"), ("desired_room_type", "TEXT"), ("desired_deposit_manwon", "INTEGER"), ("desired_monthly_rent_manwon", "INTEGER"), ("desired_available_from_date", "TEXT"), ("progress_stage", "TEXT"), ("last_contacted_date", "TEXT"), ("latest_visit_result", "TEXT"), ("closed_reason", "TEXT"), ("desired_room_types", "TEXT"), ("required_features_note", "TEXT")),
     }
     for table, columns in additions.items():
@@ -83,9 +83,13 @@ def _ensure_compatibility_columns(connection: sqlite3.Connection) -> None:
             if name not in existing:
                 if table == "contracts" and name == "balance_due_date":
                     _backup_before_balance_due_date_migration(connection)
+                if table == "contracts" and name == "brokerage_method":
+                    _backup_before_brokerage_method_migration(connection)
                 if table == "listings" and name == "listing_holder":
                     _backup_before_listing_holder_migration(connection)
                 connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {column_type}")
+    # 공동중개가 계약 유형으로 잠시 저장된 기록은 의미를 보존해 별도 중개 방식으로 옮긴다.
+    connection.execute("UPDATE contracts SET contract_type = '확인 필요', brokerage_method = '공동중개' WHERE contract_type = '공동중개' AND (brokerage_method IS NULL OR TRIM(brokerage_method) = '')")
     connection.executescript(SCHEMA)
 
 
@@ -154,6 +158,21 @@ def _backup_before_listing_holder_migration(connection: sqlite3.Connection) -> N
     backup_directory = Path(__file__).resolve().parents[1] / "backups"
     backup_directory.mkdir(parents=True, exist_ok=True)
     backup_path = backup_directory / f"real_estate_before_listing_holder_{datetime.now():%Y%m%d_%H%M%S}.db"
+    destination = sqlite3.connect(backup_path)
+    try:
+        connection.backup(destination)
+    finally:
+        destination.close()
+
+
+def _backup_before_brokerage_method_migration(connection: sqlite3.Connection) -> None:
+    """계약 중개 방식 열을 더리기 전 운영 DB 보호 사본을 남긴다."""
+    source_name = next((row[2] for row in connection.execute("PRAGMA database_list") if row[1] == "main"), "")
+    if not source_name or source_name == ":memory:" or Path(source_name).resolve() != DATABASE_PATH.resolve():
+        return
+    backup_directory = Path(__file__).resolve().parents[1] / "backups"
+    backup_directory.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_directory / f"real_estate_before_brokerage_method_{datetime.now():%Y%m%d_%H%M%S}.db"
     destination = sqlite3.connect(backup_path)
     try:
         connection.backup(destination)

@@ -150,24 +150,29 @@ def render_today_tasks() -> None:
     except (FileNotFoundError, ValueError) as error:
         st.error(str(error))
         return
+    show_completed = st.checkbox("완료 업무 보기", value=False, help="완료 체크한 오늘·지연 업무를 다시 확인할 때만 선택합니다.")
+    visible_tasks = {
+        key: [task for task in rows if show_completed or key == "상시 확인 필요" or not task["is_completed"]]
+        for key, rows in tasks.items()
+    }
     metrics = st.columns(3)
     for column, key in zip(metrics, ("오늘", "지연", "상시 확인 필요")):
         count = sum(not task["is_completed"] for task in tasks[key]) if key in ("오늘", "지연") else len(tasks[key])
         column.metric(key, count)
-    st.caption("완료는 해당 날짜 업무의 처리 표시입니다. 계약 상태는 연결 매물에 연동되며, 상담 상태는 선택한 상담 기록만 바뀝니다. 상담 내용과 고객 연락처는 상담 행을 선택한 경우에만 표시합니다.")
+    st.caption("완료 업무는 기본으로 숨깁니다. `완료 업무 보기`를 선택하면 다시 확인할 수 있습니다. 계약 상태는 연결 매물에 연동되며, 상담 상태는 선택한 상담 기록에만 반영됩니다.")
     try:
-        export_data = create_today_tasks_excel(tasks)
+        export_data = create_today_tasks_excel(visible_tasks)
     except Exception as error:
         st.error(f"오늘 할 일 엑셀 파일을 만들지 못했습니다. ({error})")
     else:
         st.download_button(
-            "오늘 할 일 엑셀 내려받기",
+            "현재 표시 업무 엑셀 내려받기",
             data=export_data,
             file_name=make_today_tasks_export_filename(reference_date.isoformat()),
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             key="today_tasks_excel_download",
         )
-    _render_date_task_section("오늘 해야 할 일", tasks["오늘"], "해당 업무가 없습니다.")
-    _render_date_task_section("지연된 일", tasks["지연"], "해당 업무가 없습니다.")
-    _render_always_listing_table(tasks["상시 확인 필요"])
+    _render_date_task_section("오늘 해야 할 일", visible_tasks["오늘"], "해당 업무가 없습니다.")
+    _render_date_task_section("지연된 일", visible_tasks["지연"], "해당 업무가 없습니다.")
+    _render_always_listing_table(visible_tasks["상시 확인 필요"])

@@ -38,7 +38,7 @@ def _task_text(item: dict, today: str) -> str:
 def _rows(items: list[dict]) -> list[dict]:
     today = date.today().isoformat()
     return [{
-        "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "호실": item["unit_number"] or "-",
+        "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "지번주소": item["lot_address"] or "-", "호실": item["unit_number"] or "-",
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"], "유입 경로": item["consultation_source"] or "-",
         "진행 단계": item["progress_stage"] or "기존 기록", "최근 상담일": item["last_contacted_date"] or item["consulted_date"], "종료 사유": item["closed_reason"] or "-", "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
         "해야 할 일": _task_text(item, today),
