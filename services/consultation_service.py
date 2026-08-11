@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.consultation_repository import add_consultation_activity, close_legacy_consultation as close_legacy_consultation_record, create_consultation, delete_consultation as delete_consultation_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_follow_up, update_consultation_status
+from storage.consultation_repository import add_consultation_activity, close_legacy_consultation as close_legacy_consultation_record, create_consultation, delete_consultation as delete_consultation_record, delete_consultation_activity as delete_consultation_activity_record, link_consultation_to_listing as link_consultation_record, update_consultation, update_consultation_activity as update_consultation_activity_record, update_consultation_follow_up, update_consultation_status
 from services.backup_service import create_daily_backup
 
 
@@ -131,6 +131,16 @@ def save_consultation_activity(consultation_id: int, activity: dict[str, Any]) -
     result = add_consultation_activity(consultation_id, activity)
     create_daily_backup()
     return result
+
+
+def save_consultation_activity_changes(activity_id: int, consultation_id: int, activity: dict[str, Any]) -> None:
+    update_consultation_activity_record(activity_id, consultation_id, activity)
+    create_daily_backup()
+
+
+def delete_consultation_activity(activity_id: int, consultation_id: int) -> None:
+    delete_consultation_activity_record(activity_id, consultation_id)
+    create_daily_backup()
 
 
 def close_legacy_consultation(consultation_id: int, closed_reason: str) -> None:

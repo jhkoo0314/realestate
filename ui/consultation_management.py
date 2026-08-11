@@ -7,7 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.contact_format import format_phone_number
-from services.consultation_service import CLOSED_REASONS, CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, PROGRESS_STAGES, VISIT_RESULTS, close_legacy_consultation, delete_consultation, link_consultation_to_listing, save_consultation, save_consultation_activity, save_consultation_changes, validate_consultation, validate_consultation_activity
+from services.consultation_service import CLOSED_REASONS, CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, PROGRESS_STAGES, VISIT_RESULTS, close_legacy_consultation, delete_consultation, delete_consultation_activity, link_consultation_to_listing, save_consultation, save_consultation_activity, save_consultation_activity_changes, save_consultation_changes, validate_consultation, validate_consultation_activity
 from services.export_service import create_consultation_excel, make_management_export_filename
 from services.record_number import consultation_number, listing_number
 from storage.consultation_repository import get_consultation_activities, get_consultation_delete_counts, get_consultation_detail, get_consultations
@@ -305,6 +305,61 @@ def _render_lookup() -> None:
         activities = get_consultation_activities(detail["consultation_id"])
         if activities:
             st.dataframe([{"상담일": row["activity_date"], "방식": row["activity_type"], "결과 단계": row["stage_after_activity"], "방문 결과": row["visit_result"] or "-", "종료 사유": row["closed_reason"] or "-", "다음 연락일": row["next_contact_date"] or "-", "내용": row["activity_note"] or "-"} for row in activities], width="stretch", hide_index=True)
+            with st.expander("후속 상담 이력 수정·삭제", expanded=False):
+                st.caption("이력을 선택한 뒤 `수정 메뉴 열기`를 누르면 해당 이력만 수정하거나 삭제할 수 있습니다.")
+                activity_options = {row["activity_id"]: f"{row['activity_date']} · {row['activity_type']} · {row['stage_after_activity']} · {row['activity_note'] or '내용 미입력'}" for row in activities}
+                selected_activity_id = st.selectbox("수정할 후속 상담 이력 선택", list(activity_options), format_func=activity_options.get, key=f"consultation_activity_select_{detail['consultation_id']}")
+                edit_target_key = f"consultation_activity_edit_target_{detail['consultation_id']}"
+                if st.button("수정 메뉴 열기", key=f"consultation_activity_edit_open_{detail['consultation_id']}"):
+                    st.session_state[edit_target_key] = selected_activity_id
+                    st.rerun()
+                edit_activity_id = st.session_state.get(edit_target_key)
+                if edit_activity_id in activity_options:
+                    selected_activity = next(row for row in activities if row["activity_id"] == edit_activity_id)
+                    st.markdown("###### 선택한 후속 상담 이력 수정")
+                    if st.button("수정 메뉴 닫기", key=f"consultation_activity_edit_close_{detail['consultation_id']}"):
+                        st.session_state.pop(edit_target_key, None)
+                        st.rerun()
+                    with st.form(f"consultation_activity_edit_{edit_activity_id}"):
+                        edit_left, edit_middle, edit_right = st.columns(3)
+                        with edit_left:
+                            edit_activity_date = st.date_input("후속 상담일", value=date.fromisoformat(selected_activity["activity_date"]), key=f"activity_date_{edit_activity_id}")
+                            edit_activity_type = st.selectbox("상담 방식", CONSULTATION_TYPES, index=CONSULTATION_TYPES.index(selected_activity["activity_type"]), key=f"activity_type_{edit_activity_id}")
+                        with edit_middle:
+                            edit_stage = st.selectbox("결과 단계", PROGRESS_STAGES, index=PROGRESS_STAGES.index(selected_activity["stage_after_activity"]), key=f"activity_stage_{edit_activity_id}")
+                            visit_index = (["미입력", *VISIT_RESULTS].index(selected_activity["visit_result"]) if selected_activity["visit_result"] in VISIT_RESULTS else 0)
+                            edit_visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS], index=visit_index, key=f"activity_visit_result_{edit_activity_id}")
+                            st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
+                        with edit_right:
+                            closed_index = (["선택 안 함", *CLOSED_REASONS].index(selected_activity["closed_reason"]) if selected_activity["closed_reason"] in CLOSED_REASONS else 0)
+                            edit_closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], index=closed_index, disabled=edit_stage != "종료", key=f"activity_closed_reason_{edit_activity_id}")
+                            edit_next_contact = st.date_input("다음 연락일", value=date.fromisoformat(selected_activity["next_contact_date"]) if selected_activity["next_contact_date"] else None, disabled=edit_stage in ("계약 완료", "종료"), key=f"activity_next_contact_{edit_activity_id}")
+                        edit_activity_note = st.text_area("이번 상담 내용", value=selected_activity["activity_note"] or "", key=f"activity_note_{edit_activity_id}")
+                        activity_change_submitted = st.form_submit_button("선택한 후속 상담 이력 수정 저장", type="primary")
+                    if activity_change_submitted:
+                        activity, errors = validate_consultation_activity({"activity_date": edit_activity_date, "activity_type": edit_activity_type, "activity_note": edit_activity_note, "stage_after_activity": edit_stage, "visit_result": None if edit_visit_result == "미입력" else edit_visit_result, "closed_reason": None if edit_closed_reason == "선택 안 함" else edit_closed_reason, "next_contact_date": edit_next_contact})
+                        if errors:
+                            for error in errors: st.error(error)
+                        else:
+                            try:
+                                save_consultation_activity_changes(edit_activity_id, detail["consultation_id"], activity)
+                            except ValueError as error:
+                                st.error(str(error))
+                            else:
+                                st.success("선택한 후속 상담 이력을 수정했습니다. 첫 상담 내용과 다른 후속 이력은 유지됩니다.")
+                                st.rerun()
+                    with st.expander("선택한 후속 상담 이력 삭제"):
+                        st.warning("선택한 후속 상담 이력 1건만 삭제합니다. 첫 상담 내용과 다른 후속 이력은 유지됩니다.")
+                        activity_delete_confirmed = st.checkbox("선택한 후속 상담 이력만 삭제하는 것을 확인했습니다.", key=f"delete_activity_confirm_{edit_activity_id}")
+                        if st.button("선택한 후속 상담 이력 삭제", type="secondary", disabled=not activity_delete_confirmed, key=f"delete_activity_{edit_activity_id}"):
+                            try:
+                                delete_consultation_activity(edit_activity_id, detail["consultation_id"])
+                            except ValueError as error:
+                                st.error(str(error))
+                            else:
+                                st.session_state.pop(edit_target_key, None)
+                                st.success("선택한 후속 상담 이력 1건을 삭제했습니다.")
+                                st.rerun()
         else:
             st.caption("아직 후속 상담 이력이 없습니다.")
         with st.form(f"consultation_activity_{detail['consultation_id']}"):
@@ -315,7 +370,8 @@ def _render_lookup() -> None:
             with activity_middle:
                 stage_index = PROGRESS_STAGES.index(detail["progress_stage"])
                 stage_after_activity = st.selectbox("결과 단계", PROGRESS_STAGES, index=stage_index)
-                visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS]) if activity_type == "방문" else "미입력"
+                visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS])
+                st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
             with activity_right:
                 closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if stage_after_activity == "종료" else "선택 안 함"
                 next_activity_contact = st.date_input("다음 연락일", value=None, disabled=stage_after_activity in ("계약 완료", "종료"))

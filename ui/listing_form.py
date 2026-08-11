@@ -233,7 +233,7 @@ def _render_new_building_fields() -> None:
         with number_column:
             st.text_input("번지 번호 *", key="registration_lot_number", placeholder="예: 1026, 산 12-3")
     st.caption("건물명을 모르면 비워 두세요. 지번 지역과 번지 번호, 호수로 등록하며 목록에는 `건물명 미입력`으로 표시됩니다.")
-    st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password", type="password")
+    st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password")
     with st.expander("건물 상세정보"):
         detail_left, detail_right = st.columns(2)
         with detail_left:
@@ -292,7 +292,7 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
         with detail_left:
             st.selectbox("방향", ["확인 필요", "동", "서", "남", "북", "남동", "남서", "북동", "북서"], key="registration_direction")
             st.selectbox("방문 방법", ["확인 필요", "비밀번호", "열쇠", "세입자 협의", "관리인 문의"], key="registration_access_method")
-            st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password", type="password")
+            st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password")
         with detail_right:
             st.text_area("구조상 장점", key="registration_unit_highlights", placeholder="예: 안방 양창, 수납 넉넉함")
 
@@ -514,7 +514,7 @@ def _render_relisting_form(unit_id: int) -> None:
     )
     if context["unit_options"] or context["unit_highlights"]:
         st.caption(f"옵션·특징: {context['unit_options'] or '옵션 미입력'} · {context['unit_highlights'] or '특징 미입력'}")
-    st.caption("공동현관·방문 비밀번호와 내부 메모는 안전을 위해 이 화면에 자동 표시하지 않습니다.")
+    st.info(f"공동현관 비밀번호: {context['common_entrance_password'] or '등록되지 않음'} · 방문 비밀번호: {context['unit_access_password'] or '등록되지 않음'}")
 
     if previous:
         price = f"{previous['deposit_manwon'] or '확인 필요'}/{previous['monthly_rent_manwon'] or '확인 필요'}"

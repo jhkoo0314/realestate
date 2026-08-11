@@ -106,7 +106,7 @@ def _render_building_edit(building: dict) -> None:
             )
             new_password = ""
             if password_action == "새 비밀번호로 변경":
-                new_password = st.text_input("새 공동현관 비밀번호", type="password", key=f"building_password_{building_id}")
+                new_password = st.text_input("새 공동현관 비밀번호", key=f"building_password_{building_id}")
             submitted = st.form_submit_button("건물 기본정보 저장", type="primary")
         if submitted:
             address_was_not_split = not lot_number and edited_lot_area == lot_area and not edited_lot_number.strip()
@@ -139,12 +139,8 @@ def _render_unit_detail(unit_id: int) -> None:
     if st.button("호실 선택 해제", key=f"clear_unit_{unit_id}"):
         st.session_state.pop("building_management_unit_id", None)
         st.rerun()
-    password_key = f"show_unit_password_{unit_id}"
-    if st.button("방문 비밀번호 보기", key=f"unit_password_button_{unit_id}"):
-        st.session_state[password_key] = True
-    if st.session_state.get(password_key):
-        password = get_unit_password(unit_id)
-        st.warning(f"방문 비밀번호: {password or '등록되지 않음'}")
+    password = get_unit_password(unit_id)
+    st.info(f"방문 비밀번호: {password or '등록되지 않음'}")
 
     with st.expander("호실 기본정보 수정", expanded=True):
         with st.form(f"unit_edit_{unit_id}"):
@@ -164,7 +160,7 @@ def _render_unit_detail(unit_id: int) -> None:
                 )
                 new_password = ""
                 if password_action == "새 비밀번호로 변경":
-                    new_password = st.text_input("새 방문 비밀번호", type="password", key=f"unit_password_{unit_id}")
+                    new_password = st.text_input("새 방문 비밀번호", key=f"unit_password_{unit_id}")
             highlights = st.text_area("구조상 장점", value=unit["unit_highlights"] or "", key=f"unit_highlights_{unit_id}")
             cautions = st.text_area("구조상 유의점", value=unit["unit_cautions"] or "", key=f"unit_cautions_{unit_id}")
             submitted = st.form_submit_button("호실 기본정보 저장", type="primary")
@@ -256,12 +252,8 @@ def render_building_management() -> None:
         st.rerun()
     st.info(f"선택한 건물: {building['building_name']} · {building['lot_address']}")
     st.caption(f"엘리베이터: {building['has_elevator'] or '확인 필요'} · 주차: {building['parking_status'] or '확인 필요'}")
-    password_key = f"show_building_password_{building['id']}"
-    if st.button("공동현관 비밀번호 보기", key=f"building_password_button_{building['id']}"):
-        st.session_state[password_key] = True
-    if st.session_state.get(password_key):
-        password = get_building_password(building["id"])
-        st.warning(f"공동현관 비밀번호: {password or '등록되지 않음'}")
+    password = get_building_password(building["id"])
+    st.info(f"공동현관 비밀번호: {password or '등록되지 않음'}")
     _render_building_edit(building)
 
     st.markdown("#### 등록 호실")

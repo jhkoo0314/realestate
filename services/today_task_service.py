@@ -31,6 +31,7 @@ def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], sta
         "건물명": item.get("building_name") or item.get("건물명") or "-",
         "지번": item.get("lot_address") or item.get("지번") or "-",
         "호실": item.get("unit_number") or item.get("호실") or "-",
+        "퇴실 예정일": item.get("move_out_due_date"),
         "상태": status,
         "task_key": task_key,
         "source_record_id": record_id,
@@ -47,9 +48,8 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
         if listing["next_check_date"] and listing["next_check_date"] <= today_text:
             bucket = "오늘" if listing["next_check_date"] == today_text else "지연"
             result[bucket].append(_row("매물", "매물 재확인", listing["next_check_date"], listing, listing["listing_status"], bucket))
-        if listing["move_out_due_date"] and listing["move_out_due_date"] <= today_text:
-            bucket = "오늘" if listing["move_out_due_date"] == today_text else "지연"
-            result[bucket].append(_row("매물", "퇴실 예정", listing["move_out_due_date"], listing, listing["listing_status"], bucket))
+        if listing["move_out_due_date"] == today_text:
+            result["오늘"].append(_row("매물", "퇴실 예정", listing["move_out_due_date"], listing, listing["listing_status"], "오늘"))
         for task in listing["tasks"]:
             if task != "재확인 필요":
                 result["상시 확인 필요"].append(_row("매물", task, None, listing, listing["listing_status"], "상시 확인 필요"))

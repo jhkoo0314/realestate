@@ -12,7 +12,7 @@ from storage.database import DATABASE_PATH, ensure_database_schema, get_connecti
 def get_unit_relisting_context(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
     require_database(path); connection=get_connection(path)
     try:
-        row=connection.execute("""SELECT u.id AS unit_id,u.unit_number,u.floor_number,u.room_type,u.direction,u.unit_options,u.access_method,u.unit_highlights,b.id AS building_id,b.building_name,b.lot_address,b.admin_address,b.road_address,b.has_elevator,b.parking_status FROM units u JOIN buildings b ON b.id=u.building_id WHERE u.id=? AND u.is_active=1 AND b.is_active=1""",(unit_id,)).fetchone(); return dict(row) if row else None
+        row=connection.execute("""SELECT u.id AS unit_id,u.unit_number,u.floor_number,u.room_type,u.direction,u.unit_options,u.access_method,u.unit_access_password,u.unit_highlights,b.id AS building_id,b.building_name,b.lot_address,b.admin_address,b.road_address,b.common_entrance_password,b.has_elevator,b.parking_status FROM units u JOIN buildings b ON b.id=u.building_id WHERE u.id=? AND u.is_active=1 AND b.is_active=1""",(unit_id,)).fetchone(); return dict(row) if row else None
     finally: connection.close()
 
 

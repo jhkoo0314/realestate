@@ -76,7 +76,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
             "해야 할 일": ", ".join(item["tasks"]) or "-",
-            "재확인일": item["next_check_date"] or "-", "메모": item["listing_note"] or "-",
+            "퇴실 예정일": item["move_out_due_date"] or "-", "재확인일": item["next_check_date"] or "-", "다음 연락일": item["next_contact_date"] or "-", "메모": item["listing_note"] or "-",
         }
         if show_closure:
             row["종료일"] = item["closed_date"] or "-"

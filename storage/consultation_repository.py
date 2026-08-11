@@ -145,8 +145,57 @@ def add_consultation_activity(consultation_id: int, activity: dict[str, Any], pa
             if connection.execute("SELECT 1 FROM consultations WHERE id = ?", (consultation_id,)).fetchone() is None:
                 raise ValueError("상담 기록을 찾을 수 없습니다.")
             cursor = connection.execute("INSERT INTO consultation_activities (consultation_id, activity_date, activity_type, activity_note, stage_after_activity, visit_result, closed_reason, next_contact_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (consultation_id, activity["activity_date"], activity["activity_type"], activity.get("activity_note"), activity["stage_after_activity"], activity.get("visit_result"), activity.get("closed_reason"), activity.get("next_contact_date")))
-            connection.execute("UPDATE consultations SET progress_stage = ?, last_contacted_date = ?, latest_visit_result = CASE WHEN ? IS NULL THEN latest_visit_result ELSE ? END, closed_reason = ?, next_contact_date = ?, consultation_status = ? WHERE id = ?", (activity["stage_after_activity"], activity["activity_date"], activity.get("visit_result"), activity.get("visit_result"), activity.get("closed_reason"), activity.get("next_contact_date"), activity["consultation_status"], consultation_id))
+            _refresh_consultation_activity_summary(connection, consultation_id)
             return cursor.lastrowid
+    finally: connection.close()
+
+
+def _refresh_consultation_activity_summary(connection: Any, consultation_id: int) -> None:
+    """남아 있는 가장 최근 후속 이력으로 상담 요약값을 맞춘다."""
+    latest = connection.execute(
+        """SELECT activity_date, stage_after_activity, visit_result, closed_reason, next_contact_date
+           FROM consultation_activities
+           WHERE consultation_id = ?
+           ORDER BY activity_date DESC, id DESC LIMIT 1""",
+        (consultation_id,),
+    ).fetchone()
+    if latest is None:
+        return
+    status = "종료" if latest["stage_after_activity"] in ("계약 완료", "종료") else "진행 중"
+    connection.execute(
+        """UPDATE consultations
+           SET progress_stage = ?, last_contacted_date = ?, latest_visit_result = ?,
+               closed_reason = ?, next_contact_date = ?, consultation_status = ?
+           WHERE id = ?""",
+        (latest["stage_after_activity"], latest["activity_date"], latest["visit_result"], latest["closed_reason"], latest["next_contact_date"], status, consultation_id),
+    )
+
+
+def update_consultation_activity(activity_id: int, consultation_id: int, activity: dict[str, Any], path: Path = DATABASE_PATH) -> None:
+    """선택한 후속 이력만 수정하고 상담 요약값을 다시 계산한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute(
+                """UPDATE consultation_activities
+                   SET activity_date = ?, activity_type = ?, activity_note = ?, stage_after_activity = ?,
+                       visit_result = ?, closed_reason = ?, next_contact_date = ?
+                   WHERE id = ? AND consultation_id = ?""",
+                (activity["activity_date"], activity["activity_type"], activity.get("activity_note"), activity["stage_after_activity"], activity.get("visit_result"), activity.get("closed_reason"), activity.get("next_contact_date"), activity_id, consultation_id),
+            ).rowcount != 1:
+                raise ValueError("수정할 후속 상담 이력을 찾을 수 없습니다.")
+            _refresh_consultation_activity_summary(connection, consultation_id)
+    finally: connection.close()
+
+
+def delete_consultation_activity(activity_id: int, consultation_id: int, path: Path = DATABASE_PATH) -> None:
+    """선택한 후속 이력만 삭제하고 남은 이력의 최신 상태를 상담 요약에 반영한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("DELETE FROM consultation_activities WHERE id = ? AND consultation_id = ?", (activity_id, consultation_id)).rowcount != 1:
+                raise ValueError("삭제할 후속 상담 이력을 찾을 수 없습니다.")
+            _refresh_consultation_activity_summary(connection, consultation_id)
     finally: connection.close()
 
 

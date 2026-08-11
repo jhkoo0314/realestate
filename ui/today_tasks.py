@@ -33,7 +33,7 @@ def _render_consultation_summary(consultation_id: int) -> None:
     st.write(detail["consultation_note"] or "등록된 상담 내용이 없습니다.")
 
 
-def _base_row(row: dict[str, Any], *, include_status: bool, due_label: str = "기한") -> dict[str, Any]:
+def _base_row(row: dict[str, Any], *, include_status: bool, include_move_out_due_date: bool = False, due_label: str = "기한") -> dict[str, Any]:
     result = {
         "업무번호": row["업무번호"],
         "연결 매물번호": row["연결 매물번호"],
@@ -45,6 +45,8 @@ def _base_row(row: dict[str, Any], *, include_status: bool, due_label: str = "�
     }
     if include_status:
         result["현재 상태"] = row["상태"]
+    if include_move_out_due_date:
+        result["퇴실 예정일"] = row["퇴실 예정일"] or "-"
     return result
 
 
@@ -57,7 +59,7 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
 
     display_rows: list[dict[str, Any]] = []
     for row in rows:
-        display = _base_row(row, include_status=source == "매물", due_label="다음 연락일" if source == "상담" else "기한")
+        display = _base_row(row, include_status=source == "매물", include_move_out_due_date=source == "매물", due_label="다음 연락일" if source == "상담" else "기한")
         if source == "계약":
             display["계약 열기"] = f"?open_task=contract&record_id={row['source_record_id']}"
             display["계약 상태"] = row["상태"]
@@ -125,13 +127,13 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
 
 
 def _render_always_listing_table(rows: list[dict[str, Any]]) -> None:
-    st.markdown(f"#### 상시 확인 필요 · {len(rows)}건")
-    if not rows:
-        st.info("날짜와 무관하게 확인할 매물 조건이 없습니다.")
-        return
-    hidden_columns = {"kind", "task_key", "source_record_id", "is_completed", "완료"}
-    hidden_columns.add("기한")
-    st.dataframe([{key: value for key, value in row.items() if key not in hidden_columns} for row in rows], width="stretch", hide_index=True)
+    with st.expander(f"상시 확인 필요 · {len(rows)}건", expanded=False):
+        if not rows:
+            st.info("날짜와 무관하게 확인할 매물 조건이 없습니다.")
+            return
+        hidden_columns = {"kind", "task_key", "source_record_id", "is_completed", "완료"}
+        hidden_columns.add("기한")
+        st.dataframe([{key: value for key, value in row.items() if key not in hidden_columns} for row in rows], width="stretch", hide_index=True)
 
 
 def _render_date_task_section(title: str, rows: list[dict[str, Any]], empty_message: str) -> None:
