@@ -332,7 +332,7 @@ def _render_lookup() -> None:
                             st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
                         with edit_right:
                             closed_index = (["선택 안 함", *CLOSED_REASONS].index(selected_activity["closed_reason"]) if selected_activity["closed_reason"] in CLOSED_REASONS else 0)
-                            edit_closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], index=closed_index, disabled=edit_stage != "종료", key=f"activity_closed_reason_{edit_activity_id}")
+                            edit_closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], index=closed_index, key=f"activity_closed_reason_{edit_activity_id}", help="결과 단계를 `종료`로 저장할 때는 반드시 선택해 주세요.")
                             edit_next_contact = st.date_input("다음 연락일", value=date.fromisoformat(selected_activity["next_contact_date"]) if selected_activity["next_contact_date"] else None, disabled=edit_stage in ("계약 완료", "종료"), key=f"activity_next_contact_{edit_activity_id}")
                         edit_activity_note = st.text_area("이번 상담 내용", value=selected_activity["activity_note"] or "", key=f"activity_note_{edit_activity_id}")
                         activity_change_submitted = st.form_submit_button("선택한 후속 상담 이력 수정 저장", type="primary")
@@ -373,7 +373,7 @@ def _render_lookup() -> None:
                 visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS])
                 st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
             with activity_right:
-                closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if stage_after_activity == "종료" else "선택 안 함"
+                closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], help="결과 단계를 `종료`로 저장할 때는 반드시 선택해 주세요.")
                 next_activity_contact = st.date_input("다음 연락일", value=None, disabled=stage_after_activity in ("계약 완료", "종료"))
             activity_note = st.text_area("이번 상담 내용", placeholder="예: 방문 후 가격을 검토하기로 함")
             activity_submitted = st.form_submit_button("후속 상담 기록 저장", type="primary")
