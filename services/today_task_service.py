@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from services.contract_schedule_service import get_contract_schedule
@@ -48,7 +48,12 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
         if listing["next_check_date"] and listing["next_check_date"] <= today_text:
             bucket = "오늘" if listing["next_check_date"] == today_text else "지연"
             result[bucket].append(_row("매물", "매물 재확인", listing["next_check_date"], listing, listing["listing_status"], bucket))
-        if listing["move_out_due_date"] == today_text:
+        move_out_due_date = listing["move_out_due_date"]
+        if move_out_due_date:
+            move_out_date = date.fromisoformat(move_out_due_date)
+            if move_out_date - timedelta(days=7) == reference_date:
+                result["오늘"].append(_row("매물", "퇴실 예정 확인 (D-7 알림)", move_out_due_date, listing, listing["listing_status"], "오늘"))
+        if move_out_due_date == today_text:
             result["오늘"].append(_row("매물", "퇴실 예정", listing["move_out_due_date"], listing, listing["listing_status"], "오늘"))
         for task in listing["tasks"]:
             if task != "재확인 필요":

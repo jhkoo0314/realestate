@@ -78,6 +78,7 @@ def _render_building_edit(building: dict) -> None:
     lot_area, lot_number = split_lot_address(building["lot_address"])
     with st.expander("건물 공통정보 수정"):
         with st.form(f"building_edit_{building_id}"):
+            edited_building_name = st.text_input("건물명", value=building["building_name"], key=f"building_name_{building_id}", help="비우면 `건물명 미입력`으로 저장됩니다.")
             address_left, address_right = st.columns(2)
             with address_left:
                 edited_lot_area = st.text_input("지번 지역 *", value=lot_area, key=f"building_lot_area_{building_id}")
@@ -117,6 +118,7 @@ def _render_building_edit(building: dict) -> None:
                 st.error("새 비밀번호를 입력하거나 ‘기존 비밀번호 유지’를 선택해 주세요.")
                 return
             update_building_management_detail(building_id, {
+                "building_name": edited_building_name,
                 "lot_address": building["lot_address"] if address_was_not_split else combine_lot_address(edited_lot_area, edited_lot_number),
                 "has_elevator": elevator, "parking_status": parking, "has_cctv": cctv, "pet_policy": pet_policy,
                 "move_in_registration_policy": move_in, "short_term_policy": short_term, "common_fee_note": common_fee or None,
@@ -126,6 +128,7 @@ def _render_building_edit(building: dict) -> None:
                 "clear_common_entrance_password": password_action == "비밀번호 삭제",
             })
             create_daily_backup()
+            st.session_state["building_management_selected"] = {**st.session_state.get("building_management_selected", {}), "building_name": edited_building_name.strip() or "건물명 미입력"}
             st.success("건물 기본정보를 저장했습니다.")
             st.rerun()
 
