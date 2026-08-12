@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.advertisement_copy_service import FEATURE_SENTENCES, REGION_SENTENCES, ROOM_TITLE_TEMPLATES, ROOM_TYPES, generate_ad_copy, parse_amount, templates_for_room_type
+from services.advertisement_copy_service import FEATURE_SENTENCES, OUTPUT_LENGTHS, REGION_SENTENCES, ROOM_TITLE_TEMPLATES, ROOM_TYPES, generate_ad_copy, parse_amount, templates_for_room_type
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
 from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
@@ -197,7 +197,7 @@ def _render_ad_copy_generator() -> None:
         deposit_text = st.text_input("보증금 (만원)", placeholder="예: 300", key="ad_copy_deposit")
         rent_text = st.text_input("월세 (만원)", placeholder="예: 55", key="ad_copy_rent")
 
-    title_family = "원룸" if room_type == "원룸" else "투룸"
+    title_family = "원룸" if room_type == "원룸" else "쓰리룸" if room_type == "쓰리룸" else "투룸"
     title_template = st.selectbox(
         "광고 제목 한 줄 템플릿 (선택)",
         ["직접 입력", *ROOM_TITLE_TEMPLATES[title_family]],
@@ -208,6 +208,7 @@ def _render_ad_copy_generator() -> None:
 
     template_choices = templates_for_room_type(room_type)
     selected_template = st.selectbox("광고 템플릿", template_choices, key="ad_copy_template")
+    output_length = st.radio("문구 길이", OUTPUT_LENGTHS, horizontal=True, key="ad_copy_output_length", help="짧은형은 핵심 조건만, 기본형은 일반 광고 본문, 상세형은 추천 대상을 더 자세히 표시합니다.")
     st.markdown("##### 광고 강조 포인트 (2~5개 권장)")
     feature_columns = st.columns(4)
     selected_features: list[str] = []
@@ -257,6 +258,7 @@ def _render_ad_copy_generator() -> None:
                 region_sentences=selected_region_sentences,
                 transit_living_text=transit_living_text,
                 additional_text=additional_text,
+                output_length=output_length,
                 include_actual_listing_notice=actual_listing_checked,
                 include_actual_photo_notice=actual_photo_checked,
             )

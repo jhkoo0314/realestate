@@ -17,7 +17,7 @@ from services.lot_address_service import combine_lot_address
 
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
 UNKNOWN_BUILDING_NAME = "건물명 미입력"
-ROOM_TYPES = ["원룸", "분리형 원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
+ROOM_TYPES = ["원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
 AVAILABILITY_TYPES = ["즉시입주", "날짜 지정", "퇴실 후 협의", "확인 필요"]
 LISTING_HOLDERS = ["크린주택관리", "삼성주택관리", "한빛주택관리", "국제주택관리", "개인매물", "직접입력"]
 

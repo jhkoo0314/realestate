@@ -43,7 +43,7 @@ INPUT_KEYS = [
 UNIT_OPTION_LABELS = ["냉장고", "세탁기", "전자레인지", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
-REGISTRATION_ROOM_TYPES = [room_type for room_type in ROOM_TYPES if room_type != "분리형 원룸"]
+REGISTRATION_ROOM_TYPES = ROOM_TYPES
 
 
 def _clear_registration_inputs() -> None:

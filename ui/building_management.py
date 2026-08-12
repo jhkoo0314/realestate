@@ -150,7 +150,8 @@ def _render_unit_detail(unit_id: int) -> None:
             left, middle, right = st.columns(3)
             with left:
                 floor = st.number_input("층", min_value=0, step=1, value=unit["floor_number"], key=f"unit_floor_{unit_id}")
-                room_type = st.selectbox("룸 형태", ROOM_TYPES, index=_index(ROOM_TYPES, unit["room_type"]), key=f"unit_room_type_{unit_id}")
+                room_type_options = [unit["room_type"], *ROOM_TYPES] if unit["room_type"] == "분리형 원룸" else ROOM_TYPES
+                room_type = st.selectbox("룸 형태", room_type_options, index=_index(room_type_options, unit["room_type"]), key=f"unit_room_type_{unit_id}")
             with middle:
                 direction = st.selectbox("방향", DIRECTIONS, index=_index(DIRECTIONS, unit["direction"]), key=f"unit_direction_{unit_id}")
                 access_method = st.selectbox("방문 방법", ACCESS_METHODS, index=_index(ACCESS_METHODS, unit["access_method"]), key=f"unit_access_{unit_id}")

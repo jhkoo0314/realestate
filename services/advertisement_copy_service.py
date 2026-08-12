@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 
-ROOM_TYPES = ["원룸", "투룸", "투베이", "쓰리베이", "기타"]
+ROOM_TYPES = ["원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "기타"]
+OUTPUT_LENGTHS = ["짧은형", "기본형", "상세형"]
 
 ROOM_TITLE_TEMPLATES = {
     "원룸": [
@@ -50,6 +51,18 @@ ROOM_TITLE_TEMPLATES = {
         "🔑 즉시 입주 가능한 깔끔한 투룸.",
         "🏡 편안한 생활이 가능한 아늑한 투룸.",
     ],
+    "쓰리룸": [
+        "🏡 가족 거주에 여유로운 쓰리룸입니다.",
+        "🏠 방 3개로 생활공간을 넉넉하게 나눠 쓰는 쓰리룸!",
+        "👨‍👩‍👧 가족 생활에 잘 맞는 깔끔한 쓰리룸.",
+        "🛋 각 방을 다양하게 활용하기 좋은 여유로운 쓰리룸.",
+        "📦 수납과 생활공간이 넉넉한 실속 쓰리룸.",
+        "🌞 채광과 공간감을 함께 갖춘 쓰리룸입니다.",
+        "🚗 주차 가능 여부를 확인한 쓰리룸 매물.",
+        "📍 생활권과 넉넉한 공간을 함께 보는 쓰리룸.",
+        "💼 재택·자녀방 등 공간 분리가 필요한 분께 추천.",
+        "🏡 오래 편하게 거주할 집을 찾는 분께 좋은 쓰리룸.",
+    ],
 }
 
 AD_TEMPLATES = {
@@ -66,16 +79,52 @@ AD_TEMPLATES = {
         "recommendations": ["깔끔한 컨디션을 중요하게 보는 분", "옵션을 갖춘 원룸을 찾는 분"],
     },
     "투룸 기본형": {
-        "room_types": {"투룸", "투베이", "쓰리베이", "기타"},
+        "room_types": {"투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
         "opening": "원룸보다 여유 있는 공간을 찾는 분께 잘 맞는 실속 있는 투룸입니다.",
         "layout": "침실과 생활공간을 나눠 쓰기 좋은 투룸 구조",
+        "opening_by_room_type": {"쓰리룸": "방마다 용도를 나눠 쓰기 좋은 여유로운 쓰리룸 매물입니다."},
+        "layout_by_room_type": {"쓰리룸": "침실·자녀방·서재 등 생활공간을 나눠 쓰기 좋은 쓰리룸 구조"},
         "recommendations": ["원룸보다 여유 있는 공간이 필요한 분", "두 분이 함께 거주할 집을 찾는 분"],
     },
     "투룸 공간·수납형": {
-        "room_types": {"투룸", "투베이", "쓰리베이", "기타"},
+        "room_types": {"투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
         "opening": "수납과 공간 활용에 장점이 있는 여유로운 투룸 매물입니다.",
         "layout": "침실과 생활공간을 나눠 쓰기 좋은 투룸 구조",
+        "opening_by_room_type": {"쓰리룸": "수납과 공간 활용을 넉넉하게 고려할 수 있는 쓰리룸 매물입니다."},
+        "layout_by_room_type": {"쓰리룸": "여러 방을 생활·수납 공간으로 나눠 활용하기 좋은 쓰리룸 구조"},
         "recommendations": ["짐이 있거나 수납공간이 필요한 분", "침실과 생활공간을 분리하고 싶은 분"],
+    },
+    "직장인 출퇴근형": {
+        "room_types": {"원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
+        "opening": "출퇴근 동선과 일상생활의 편의를 함께 고려하는 분께 잘 맞는 매물입니다.",
+        "layout": "출퇴근 후 편하게 쉴 수 있도록 생활 동선을 고려하기 좋은 구조",
+        "recommendations": ["출퇴근 편의를 중요하게 보는 분", "생활권을 함께 고려하는 직장인"],
+    },
+    "신혼·2인 거주형": {
+        "room_types": {"투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
+        "opening": "두 분이 함께 거주할 공간과 생활 동선을 고려하는 분께 잘 맞는 매물입니다.",
+        "layout": "침실과 생활공간을 나눠 쓰기 좋은 여유 있는 구조",
+        "opening_by_room_type": {"쓰리룸": "가족 또는 다인 거주의 생활공간을 넉넉하게 고려하는 분께 잘 맞는 쓰리룸입니다."},
+        "layout_by_room_type": {"쓰리룸": "가족 구성원별 생활공간을 나눠 쓰기 좋은 여유 있는 구조"},
+        "recommendations": ["신혼 또는 2인 거주를 준비하는 분", "각자의 생활공간이 필요한 분"],
+    },
+    "즉시 입주형": {
+        "room_types": {"원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
+        "opening": "입주 시점을 빠르게 맞춰야 하는 분께 확인해 볼 만한 매물입니다.",
+        "layout": "입주 준비를 빠르게 진행하기 좋은 실용적인 구조",
+        "recommendations": ["빠른 입주를 준비하는 분", "입주 가능 시점을 우선 확인하는 분"],
+    },
+    "가성비형": {
+        "room_types": {"원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "기타"},
+        "opening": "예산과 필요한 생활 조건을 함께 비교하는 분께 잘 맞는 실속형 매물입니다.",
+        "layout": "필요한 생활공간을 알맞게 구성하기 좋은 실용적인 구조",
+        "recommendations": ["예산을 고려해 매물을 비교하는 분", "필요한 조건을 우선 확인하는 분"],
+    },
+    "쓰리룸 가족·공간형": {
+        "room_types": {"쓰리룸"},
+        "opening": "가족 거주와 방별 공간 활용을 함께 고려하는 분께 잘 맞는 쓰리룸 매물입니다.",
+        "layout": "침실·자녀방·서재 등 용도에 맞춰 방을 나눠 쓰기 좋은 쓰리룸 구조",
+        "recommendations": ["가족 거주를 준비하는 분", "방별 공간 분리가 필요한 분", "넉넉한 생활공간을 찾는 분"],
     },
 }
 
@@ -160,6 +209,7 @@ def generate_ad_copy(
     region_sentences: list[str] | None = None,
     transit_living_text: str = "",
     additional_text: str = "",
+    output_length: str = "기본형",
     include_actual_listing_notice: bool = False,
     include_actual_photo_notice: bool = False,
 ) -> dict[str, str]:
@@ -170,6 +220,8 @@ def generate_ad_copy(
         raise ValueError("방 형태를 다시 선택해 주세요.")
     if deposit < 0 or rent < 0:
         raise ValueError("보증금과 월세는 0 이상으로 입력해 주세요.")
+    if output_length not in OUTPUT_LENGTHS:
+        raise ValueError("문구 길이를 다시 선택해 주세요.")
 
     template = AD_TEMPLATES[template_name]
     features = [feature for feature in (selected_features or []) if feature in FEATURE_SENTENCES]
@@ -181,19 +233,27 @@ def generate_ad_copy(
             title_parts = [features[0] if features else room_type, room_type]
         title = " ".join(title_parts)
 
-    lines = [template["opening"]]
-    if room_type in {"투룸", "투베이", "쓰리베이"}:
-        lines.append("침실과 생활공간을 나눠 쓰고 싶은 분께 추천드려요.")
+    core_lines = [template["opening"]]
+    if room_type in {"투룸", "투베이", "쓰리룸", "쓰리베이"}:
+        core_lines.append("침실과 생활공간을 나눠 쓰고 싶은 분께 추천드려요.")
     if location.strip() or building_name.strip():
         address = " ".join(part.strip() for part in (location, building_name) if part.strip())
-        lines.extend(["", f"📍 {address}"])
-    lines.extend(["", "✔ 핵심 포인트", f"✔ {template['layout']}"])
-    lines.extend(f"✔ {FEATURE_SENTENCES[feature]}" for feature in features)
-    lines.append(f"✔ 보증금 {deposit:,} / 월세 {rent:,}")
+        core_lines.extend(["", f"📍 {address}"])
+    opening = template.get("opening_by_room_type", {}).get(room_type, template["opening"])
+    layout = template.get("layout_by_room_type", {}).get(room_type, template["layout"])
+    core_lines = [opening, *core_lines[1:]]
+    core_lines.extend(["", "✔ 핵심 포인트", f"✔ {layout}"])
+    core_lines.extend(f"✔ {FEATURE_SENTENCES[feature]}" for feature in features)
+    core_lines.append(f"✔ 보증금 {deposit:,} / 월세 {rent:,}")
     if available_date.strip():
-        lines.append(f"✔ 입주 가능: {available_date.strip()}")
+        core_lines.append(f"✔ 입주 가능: {available_date.strip()}")
     if additional_text.strip():
-        lines.extend(f"✔ {line.strip()}" for line in additional_text.splitlines() if line.strip())
+        core_lines.extend(f"✔ {line.strip()}" for line in additional_text.splitlines() if line.strip())
+    if output_length == "짧은형":
+        core_lines.extend(["", "자세한 조건과 방문 가능 여부는 문의로 확인해 주세요."])
+        return {"title": title, "body": "\n".join(core_lines)}
+
+    lines = core_lines
     selected_region_sentences = [sentence.strip() for sentence in (region_sentences or []) if sentence.strip()]
     if region_sentence.strip():
         selected_region_sentences.insert(0, region_sentence.strip())
@@ -202,7 +262,10 @@ def generate_ad_copy(
         lines.extend(selected_region_sentences)
         lines.extend(line.strip() for line in transit_living_text.splitlines() if line.strip())
     lines.extend(["", "💡 이런 분께 추천드려요"])
-    lines.extend(f"👉 {item}" for item in [*template["recommendations"], "교통과 생활편의를 중요하게 보는 분"])
+    recommendations = [*template["recommendations"], "교통과 생활편의를 중요하게 보는 분"]
+    if output_length == "상세형":
+        recommendations.append("입주 전 조건을 꼼꼼히 비교하고 싶은 분")
+    lines.extend(f"👉 {item}" for item in recommendations)
     notices = list(COMMON_NOTICE)
     if include_actual_listing_notice:
         notices.insert(0, "본 매물은 실매물입니다.")
