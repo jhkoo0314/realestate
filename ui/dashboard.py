@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import streamlit as st
 
@@ -39,12 +39,33 @@ def _date_text(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _recheck_management_counts(listings: list[dict]) -> tuple[int, int]:
+    today = date.today()
+    recheck_deadline = today + timedelta(days=7)
+
+    def is_recheck_due_within_seven_days(item: dict) -> bool:
+        next_check_date = item.get("next_check_date")
+        if not next_check_date:
+            return False
+        try:
+            scheduled_date = date.fromisoformat(next_check_date)
+        except ValueError:
+            return False
+        return today < scheduled_date <= recheck_deadline
+
+    due_or_overdue = sum("재확인 필요" in item["tasks"] for item in listings)
+    upcoming_within_seven_days = sum(is_recheck_due_within_seven_days(item) for item in listings)
+    return due_or_overdue, upcoming_within_seven_days
+
+
 def _summary(listings: list[dict]) -> dict[str, int]:
-    today = date.today().isoformat()
+    today_text = date.today().isoformat()
+    due_or_overdue, upcoming_within_seven_days = _recheck_management_counts(listings)
+
     return {
-        "오늘 새 접수": sum(item["received_date"] == today for item in listings),
+        "오늘 새 접수": sum(item["received_date"] == today_text for item in listings),
         "퇴실 예정": sum(item["listing_status"] == "퇴실 예정" for item in listings),
-        "재확인 필요": sum("재확인 필요" in item["tasks"] for item in listings),
+        "재확인 관리": due_or_overdue + upcoming_within_seven_days,
         "사진 촬영 필요": sum("사진 촬영 필요" in item["tasks"] for item in listings),
         "공실": sum(item["listing_status"] == "공실" for item in listings),
     }
@@ -239,9 +260,12 @@ def render_dashboard(go_to_listing) -> None:
         return
 
     metrics = _summary(all_listings)
+    recheck_due_or_overdue, recheck_upcoming = _recheck_management_counts(all_listings)
     metric_columns = st.columns(5)
     for column, (label, value) in zip(metric_columns, metrics.items()):
         column.metric(label, value)
+        if label == "재확인 관리":
+            column.caption(f"도래·지연 {recheck_due_or_overdue}건 · 7일 이내 {recheck_upcoming}건")
 
     st.caption(f"데이터 파일: {DATABASE_PATH} · 현재 매물 {len(all_listings)}건")
     if not all_listings:
