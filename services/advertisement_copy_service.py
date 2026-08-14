@@ -177,6 +177,79 @@ COMMON_NOTICE = [
 ]
 
 
+LEAD_TOP_PRESETS = {
+    "다양한 매물 비교": "★ 찾으시는 조건에 맞춰 다양한 매물을 비교해드립니다.",
+    "조건 상담": "★ 보증금·월세·입주일을 말씀해주시면 조건에 맞는 매물을 찾아드립니다.",
+    "대체 매물 안내": "★ 광고 매물이 조건에 맞지 않아도 다른 매물 안내가 가능합니다.",
+}
+
+LEAD_ALTERNATIVE_PRESETS = {
+    "기본 상담 유도": "현재 매물이 조건에 맞지 않더라도 괜찮습니다. 예산·입주일·위치·주차 등 원하는 조건을 말씀해주시면 다른 매물도 함께 찾아드립니다.",
+    "비교 상담 유도": "원룸·투룸 등 여러 매물을 비교해 보실 수 있습니다. 필요한 조건을 알려주시면 맞는 매물을 안내해드립니다.",
+    "입주 조건 상담": "입주 시기와 예산이 정해지지 않았어도 상담 가능합니다. 현재 상황에 맞는 매물을 함께 찾아드립니다.",
+}
+
+LEAD_BASE_OPTION_TEXT = "냉장고, 세탁기, 에어컨 등 생활 기본 옵션을 갖춘 실용적인 구성"
+BUILDING_HIGHLIGHTS = ["엘리베이터 있음", "주차 편리함"]
+BUILDING_HIGHLIGHT_SENTENCES = {
+    "엘리베이터 있음": "엘리베이터 있어 층간 이동이 편리함",
+    "주차 편리함": "주차가 편리해 차량 이용을 고려하는 분께 적합",
+}
+
+# 지역 핵심요약은 광고에 바로 쓰는 고정 템플릿이다. 개별 매물의 거리·주차·옵션은
+# 확인 전에는 넣지 않고, 선택한 지역과 실제 주소가 맞는 경우에만 사용한다.
+REGION_SUMMARY_TEMPLATES = {
+    "북수리": {
+        "배방·월천 생활권형": [
+            "배방·월천 생활권을 함께 고려하기 좋은 위치",
+            "배방과 탕정 방향 생활권 이용을 살펴보기 좋은 지역",
+            "생활 편의와 주거 환경을 함께 비교하는 분께 추천",
+        ],
+        "실거주 생활권형": [
+            "배방 생활권에서 편하게 거주할 곳을 찾는 분께 추천",
+            "일상 이동과 생활 편의를 함께 고려하기 좋은 지역",
+            "원룸·투룸 조건을 비교하며 찾기 좋은 배방 생활권",
+        ],
+    },
+    "장재리": {
+        "천안아산역 생활권형": [
+            "천안아산역과 배방 생활권을 함께 고려하는 위치",
+            "광역 교통 이용을 중요하게 보는 분께 추천",
+            "생활권과 이동 편의를 함께 비교하기 좋은 장재리",
+        ],
+        "배방 신도시 생활권형": [
+            "배방 신도시 생활권을 고려하는 분께 추천",
+            "주거·생활 편의와 이동 동선을 함께 살펴보기 좋은 지역",
+            "원룸·투룸을 비교하며 찾기 좋은 장재리 생활권",
+        ],
+    },
+    "공수리": {
+        "배방복합커뮤니티센터 생활권형": [
+            "배방복합커뮤니티센터 생활권을 고려하는 위치",
+            "배방 생활권의 생활 편의를 함께 살펴보기 좋은 지역",
+            "교통과 일상 편의를 함께 비교하는 분께 추천",
+        ],
+        "배방 생활권형": [
+            "배방 생활권에서 실거주 매물을 찾는 분께 추천",
+            "생활 편의와 주거 환경을 함께 고려하기 좋은 공수리",
+            "원룸·투룸 조건을 비교하며 찾기 좋은 배방 생활권",
+        ],
+    },
+    "월천지구": {
+        "배방·탕정 생활권형": [
+            "배방·탕정 생활권을 함께 고려하는 위치",
+            "인근 생활권과 이동 동선을 함께 살펴보기 좋은 지역",
+            "생활 편의와 주거 환경을 비교하는 분께 추천",
+        ],
+        "배방 생활권형": [
+            "배방 생활권에서 거주할 곳을 찾는 분께 추천",
+            "일상생활과 인근 업무지역 이동을 함께 고려하기 좋은 위치",
+            "원룸·투룸을 비교하며 찾기 좋은 월천지구 생활권",
+        ],
+    },
+}
+
+
 def parse_amount(value: str, label: str) -> int:
     """만원 단위 금액을 숫자로만 안전하게 받는다."""
     compact = value.strip().replace(",", "")
@@ -272,5 +345,82 @@ def generate_ad_copy(
     if include_actual_photo_notice:
         notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 호실 촬영본이며 촬영 시점에 따라 일부 차이가 있을 수 있습니다.")
     lines.extend(["", "📌 안내사항"])
+    lines.extend(f"✔ {notice}" for notice in notices)
+    return {"title": title, "body": "\n".join(lines)}
+
+
+def parse_optional_amount(value: str, label: str) -> int | None:
+    """광고 직접입력에서 비울 수 있는 금액을 만원 단위 숫자로 받는다."""
+    if not value.strip():
+        return None
+    return parse_amount(value, label)
+
+
+def generate_lead_ad_copy(
+    *,
+    location: str,
+    room_type: str,
+    transaction_type: str,
+    deposit: int | None,
+    rent: int | None,
+    management_fee: int | None,
+    available_date: str,
+    top_message: str,
+    summary_points: list[str],
+    building_highlight: str | None,
+    alternative_message: str,
+    include_actual_listing_notice: bool,
+    include_actual_photo_notice: bool,
+) -> dict[str, str]:
+    """직접 입력한 확인 정보만으로 상담 리드형 7블록 광고문을 만든다."""
+    if room_type not in ROOM_TYPES:
+        raise ValueError("방 형태를 다시 선택해 주세요.")
+    if transaction_type not in {"월세", "전세", "보증부월세", "가격 문의"}:
+        raise ValueError("거래 방식을 다시 선택해 주세요.")
+    if building_highlight not in (None, *BUILDING_HIGHLIGHTS):
+        raise ValueError("건물 특장점을 다시 선택해 주세요.")
+
+    clean = lambda value: str(value or "").strip()
+    title = " ".join(part for part in (clean(location), room_type) if part) or room_type
+    summaries = [clean(point) for point in summary_points if clean(point)][:3]
+    summary_lines = [f"# {point}" for point in summaries] or ["# 확인된 매물 조건을 문의로 안내해드립니다."]
+
+    price_parts: list[str] = []
+    if transaction_type == "전세":
+        if deposit is not None:
+            price_parts.append(f"전세 {deposit:,}만원")
+    elif transaction_type == "가격 문의":
+        price_parts.append("가격은 문의로 확인해 주세요.")
+    else:
+        if deposit is not None:
+            price_parts.append(f"보증금 {deposit:,}만원")
+        if rent is not None:
+            price_parts.append(f"월세 {rent:,}만원")
+    if management_fee is not None:
+        price_parts.append(f"관리비 {management_fee:,}만원")
+    if clean(available_date):
+        price_parts.append(f"입주 가능 {clean(available_date)}")
+    if not price_parts:
+        price_parts.append("가격은 문의로 확인해 주세요.")
+
+    notices = ["다가구주택은 호실별 전용면적을 참고용으로 안내드립니다.", "계약 가능 여부 및 옵션은 실시간으로 변경될 수 있으므로 방문 전 문의 부탁드립니다."]
+    if include_actual_listing_notice:
+        notices.insert(0, "본 매물은 실매물입니다.")
+    if include_actual_photo_notice:
+        notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 호실 촬영본이며 촬영 시점에 따라 일부 차이가 있을 수 있습니다.")
+
+    lines = [
+        clean(top_message) or LEAD_TOP_PRESETS["다양한 매물 비교"],
+        "", "────────────", "", "◇ 핵심 요약",
+        *summary_lines,
+        "", "◇ 위치 정보", f"# {clean(location) or '위치는 문의로 확인해 주세요.'}",
+    ]
+    lines.extend(["", "◇ 가격 정보"])
+    lines.extend(f"# {price_part}" for price_part in price_parts)
+    lines.extend(["", "◇ 옵션 정보"])
+    lines.append(f"# {LEAD_BASE_OPTION_TEXT}")
+    if building_highlight:
+        lines.extend(["", "◇ 건물 특장점", f"# {BUILDING_HIGHLIGHT_SENTENCES[building_highlight]}"])
+    lines.extend(["", "☎ 찾으시는 조건이 따로 있으신가요?", "", clean(alternative_message) or LEAD_ALTERNATIVE_PRESETS["기본 상담 유도"], "", "📌 안내사항"])
     lines.extend(f"✔ {notice}" for notice in notices)
     return {"title": title, "body": "\n".join(lines)}

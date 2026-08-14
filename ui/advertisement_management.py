@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.advertisement_copy_service import FEATURE_SENTENCES, OUTPUT_LENGTHS, REGION_SENTENCES, ROOM_TITLE_TEMPLATES, ROOM_TYPES, generate_ad_copy, parse_amount, templates_for_room_type
+from services.advertisement_copy_service import BUILDING_HIGHLIGHTS, LEAD_ALTERNATIVE_PRESETS, LEAD_BASE_OPTION_TEXT, LEAD_TOP_PRESETS, REGION_SUMMARY_TEMPLATES, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
 from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
@@ -182,63 +182,48 @@ def _render_advertisement_registration() -> None:
 
 
 def _render_ad_copy_generator() -> None:
-    """매물 DB 저장 없이 조건을 직접 입력해 광고 문구를 만든다."""
+    """매물 DB와 연결하지 않고 직접 입력한 사실만으로 광고 문구를 만든다."""
     st.markdown("#### 광고 문구 만들기")
-    st.caption("매물 등록이나 광고 채널 연결 없이 조건만 직접 입력해 문구를 만듭니다. 생성 문구는 저장되지 않습니다.")
+    st.caption("매물 DB와 연결하지 않습니다. 지금 확인한 사실만 직접 입력해 상담 리드형 광고문을 만들며, 입력값과 생성 결과는 저장되지 않습니다.")
+    st.warning("비밀번호·연락처·내부 메모는 입력하거나 광고문에 넣지 마세요.")
 
-    left, middle, right = st.columns(3)
-    with left:
-        region = st.selectbox("핵심 지역 선택", ["직접 입력", *REGION_SENTENCES], key="ad_copy_region")
-        location = st.text_input("지역 또는 지번 (선택)", placeholder="예: 북수리 1234", key="ad_copy_location")
-    with middle:
+    location_column, room_type_column, transaction_type_column = st.columns([2, 1, 1])
+    with location_column:
+        location = st.text_input("지역 또는 지번", placeholder="예: 장재리 1684", key="ad_copy_location")
+    with room_type_column:
         room_type = st.selectbox("방 형태", ROOM_TYPES, key="ad_copy_room_type")
+    with transaction_type_column:
+        transaction_type = st.selectbox("거래 방식", ["월세", "전세", "보증부월세", "가격 문의"], key="ad_copy_transaction_type")
+
+    deposit_column, rent_column, fee_column, available_column = st.columns(4)
+    with deposit_column:
+        deposit_text = st.text_input("보증금 (만원 · 선택)", placeholder="예: 500", key="ad_copy_deposit")
+    with rent_column:
+        rent_text = st.text_input("월세 (만원 · 선택)", placeholder="예: 40", key="ad_copy_rent")
+    with fee_column:
+        management_fee_text = st.text_input("관리비 (만원 · 선택)", placeholder="예: 8", key="ad_copy_management_fee")
+    with available_column:
         available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
-    with right:
-        deposit_text = st.text_input("보증금 (만원)", placeholder="예: 300", key="ad_copy_deposit")
-        rent_text = st.text_input("월세 (만원)", placeholder="예: 55", key="ad_copy_rent")
 
-    title_family = "원룸" if room_type == "원룸" else "쓰리룸" if room_type == "쓰리룸" else "투룸"
-    title_template = st.selectbox(
-        "광고 제목 한 줄 템플릿 (선택)",
-        ["직접 입력", *ROOM_TITLE_TEMPLATES[title_family]],
-        key=f"ad_copy_title_template_{title_family}",
-    )
-    if title_template != "직접 입력":
-        st.caption("선택한 문구가 제목으로 그대로 사용됩니다. 실매물·즉시 입주·채광·도보권 등 사실 확인이 필요한 표현은 확인된 매물에만 선택해 주세요.")
+    st.markdown("##### 상담 유도 문구")
+    top_preset_name = st.selectbox("상단 상담문구 프리셋", list(LEAD_TOP_PRESETS), key="ad_copy_top_preset")
+    top_message = st.text_area("상단 상담문구 수정", value=LEAD_TOP_PRESETS[top_preset_name], key="ad_copy_top_message", height=68)
 
-    template_choices = templates_for_room_type(room_type)
-    selected_template = st.selectbox("광고 템플릿", template_choices, key="ad_copy_template")
-    output_length = st.radio("문구 길이", OUTPUT_LENGTHS, horizontal=True, key="ad_copy_output_length", help="짧은형은 핵심 조건만, 기본형은 일반 광고 본문, 상세형은 추천 대상을 더 자세히 표시합니다.")
-    st.markdown("##### 광고 강조 포인트 (2~5개 권장)")
-    feature_columns = st.columns(4)
-    selected_features: list[str] = []
-    for index, feature in enumerate(FEATURE_SENTENCES):
-        with feature_columns[index % len(feature_columns)]:
-            if st.checkbox(feature, key=f"ad_copy_feature_{feature}"):
-                selected_features.append(feature)
+    st.markdown("##### 핵심 요약")
+    summary_region, summary_template_column = st.columns(2)
+    with summary_region:
+        summary_region_name = st.selectbox("핵심 요약 지역", list(REGION_SUMMARY_TEMPLATES), key="ad_copy_summary_region")
+    with summary_template_column:
+        summary_template_name = st.selectbox("지역 핵심요약 템플릿", list(REGION_SUMMARY_TEMPLATES[summary_region_name]), key=f"ad_copy_summary_template_{summary_region_name}")
+    summary_points = REGION_SUMMARY_TEMPLATES[summary_region_name][summary_template_name]
+    st.caption("선택한 지역 템플릿의 핵심 요약이 그대로 광고문에 들어갑니다. 실제 매물 주소가 해당 지역인지 확인한 경우에만 사용하세요.")
+    st.code("\n".join(f"# {point}" for point in summary_points), language=None)
+    st.markdown("##### 옵션 및 특징")
+    st.info(f"기본 옵션 문구: {LEAD_BASE_OPTION_TEXT}")
+    building_highlight_choice = st.selectbox("건물 특장점", ["선택 안 함", *BUILDING_HIGHLIGHTS], key="ad_copy_building_highlight")
 
-    selected_region_sentences: list[str] = []
-    if region != "직접 입력":
-        st.markdown("##### 지역 생활권 강조 (선택 · 실제 매물 위치 확인 후 여러 개 선택 가능)")
-        region_columns = st.columns(2)
-        for index, sentence in enumerate(REGION_SENTENCES[region]):
-            with region_columns[index % len(region_columns)]:
-                if st.checkbox(sentence, key=f"ad_copy_region_sentence_{region}_{index}"):
-                    selected_region_sentences.append(sentence)
-        st.caption("선택한 문구는 모두 본문의 `교통 & 생활`에 들어갑니다. 거리·도보시간은 매물마다 다르므로 실제 위치를 확인한 경우에만 선택해 주세요.")
-
-    transit_living_text = st.text_area(
-        "교통·생활 장점 (선택 · 확인된 내용만 줄마다 입력)",
-        placeholder="예: 1호선 배방역 도보 약 10분대\n가까운 거리의 버스정류장\n편의점 도보 1분권",
-        key="ad_copy_transit_living_text",
-        height=80,
-    )
-    additional_text = st.text_area(
-        "추가 핵심 포인트 (선택 · 확인된 내용만 줄마다 입력)",
-        placeholder="예: 안방이 넓음\n작은방에도 창 있음",
-        key="ad_copy_additional_text",
-        height=80,
-    )
+    alternative_preset_name = st.selectbox("대체매물 상담문구 프리셋", list(LEAD_ALTERNATIVE_PRESETS), key="ad_copy_alternative_preset")
+    alternative_message = st.text_area("대체매물 상담문구 수정", value=LEAD_ALTERNATIVE_PRESETS[alternative_preset_name], key="ad_copy_alternative_message", height=88)
     notice_left, notice_right = st.columns(2)
     with notice_left:
         actual_listing_checked = st.checkbox("실매물 확인됨 — ‘본 매물은 실매물입니다’ 포함", key="ad_copy_actual_listing")
@@ -246,19 +231,18 @@ def _render_ad_copy_generator() -> None:
         actual_photo_checked = st.checkbox("실제 호실 사진 확인됨 — 사진 안내 포함", key="ad_copy_actual_photo")
     if st.button("광고 문구 생성", type="primary", key="ad_copy_generate"):
         try:
-            result = generate_ad_copy(
+            result = generate_lead_ad_copy(
+                location=location,
                 room_type=room_type,
-                deposit=parse_amount(deposit_text, "보증금"),
-                rent=parse_amount(rent_text, "월세"),
-                template_name=selected_template,
-                location=location or ("" if region == "직접 입력" else region),
-                title_template="" if title_template == "직접 입력" else title_template,
+                transaction_type=transaction_type,
+                deposit=parse_optional_amount(deposit_text, "보증금"),
+                rent=parse_optional_amount(rent_text, "월세"),
+                management_fee=parse_optional_amount(management_fee_text, "관리비"),
                 available_date=available_date,
-                selected_features=selected_features,
-                region_sentences=selected_region_sentences,
-                transit_living_text=transit_living_text,
-                additional_text=additional_text,
-                output_length=output_length,
+                top_message=top_message,
+                summary_points=summary_points,
+                building_highlight=None if building_highlight_choice == "선택 안 함" else building_highlight_choice,
+                alternative_message=alternative_message,
                 include_actual_listing_notice=actual_listing_checked,
                 include_actual_photo_notice=actual_photo_checked,
             )
