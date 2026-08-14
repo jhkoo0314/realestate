@@ -66,7 +66,7 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
         parameters.append(f"%{holder_keyword}%")
     connection = get_connection(path)
     try:
-        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,l.received_date,l.listing_status,l.closed_date,l.close_reason,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.available_from_date,l.move_out_due_date,l.has_listing_photos,l.cleaning_status,l.wallpaper_status,l.repair_status,l.listing_holder,l.next_check_date,l.listing_note,l.updated_at,
+        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,u.unit_access_password,l.received_date,l.listing_status,l.closed_date,l.close_reason,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.available_from_date,l.move_out_due_date,l.has_listing_photos,l.cleaning_status,l.wallpaper_status,l.repair_status,l.listing_holder,l.next_check_date,l.listing_note,l.updated_at,
         (SELECT MIN(c.next_contact_date) FROM consultations c WHERE c.listing_id=l.id AND c.consultation_status != '종료' AND c.next_contact_date IS NOT NULL) AS next_contact_date
         FROM listings l JOIN units u ON u.id=l.unit_id JOIN buildings b ON b.id=u.building_id WHERE {' AND '.join(conditions)} ORDER BY CASE WHEN l.closed_date IS NULL THEN 1 ELSE 0 END, l.closed_date DESC, l.received_date DESC,l.updated_at DESC,l.id DESC""", parameters).fetchall()
         listings=[dict(row) for row in rows]

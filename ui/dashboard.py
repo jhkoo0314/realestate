@@ -58,6 +58,41 @@ def _recheck_management_counts(listings: list[dict]) -> tuple[int, int]:
     return due_or_overdue, upcoming_within_seven_days
 
 
+def _recheck_management_rows(listings: list[dict]) -> list[dict]:
+    """재확인 관리 수치와 같은 기준으로 확인할 매물 목록을 만든다."""
+    today = date.today()
+    recheck_deadline = today + timedelta(days=7)
+    rows = []
+    for item in listings:
+        next_check_date = item.get("next_check_date")
+        if not next_check_date:
+            continue
+        try:
+            scheduled_date = date.fromisoformat(next_check_date)
+        except ValueError:
+            continue
+        if scheduled_date < today:
+            recheck_status = "지연"
+        elif scheduled_date == today:
+            recheck_status = "오늘 재확인"
+        elif scheduled_date <= recheck_deadline:
+            recheck_status = "7일 이내 예정"
+        else:
+            continue
+        rows.append({
+            "매물번호": listing_number(item["listing_id"]),
+            "재확인 구분": recheck_status,
+            "재확인일": next_check_date,
+            "상태": item["listing_status"],
+            "건물명": item["building_name"],
+            "지번주소": item["lot_address"],
+            "호수": item["unit_number"],
+            "매물 보유처": item["listing_holder"] or "미입력",
+        })
+    order = {"지연": 0, "오늘 재확인": 1, "7일 이내 예정": 2}
+    return sorted(rows, key=lambda row: (order[row["재확인 구분"]], row["재확인일"], row["매물번호"]))
+
+
 def _summary(listings: list[dict]) -> dict[str, int]:
     today_text = date.today().isoformat()
     due_or_overdue, upcoming_within_seven_days = _recheck_management_counts(listings)
@@ -69,11 +104,6 @@ def _summary(listings: list[dict]) -> dict[str, int]:
         "사진 촬영 필요": sum("사진 촬영 필요" in item["tasks"] for item in listings),
         "공실": sum(item["listing_status"] == "공실" for item in listings),
     }
-
-
-def _site_preparation_text(item: dict) -> str:
-    labels = (("청소", "cleaning_status"), ("도배", "wallpaper_status"), ("수리", "repair_status"))
-    return " · ".join(f"{label} {item.get(field) or '확인 필요'}" for label, field in labels)
 
 
 def _photo_availability_text(item: dict) -> str:
@@ -95,7 +125,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
             "매물번호": listing_number(item["listing_id"]), "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
-            "입주 가능": availability, "사진 보유": _photo_availability_text(item), "현장 준비": _site_preparation_text(item),
+            "입주 가능": availability, "사진 보유": _photo_availability_text(item), "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
             "해야 할 일": ", ".join(item["tasks"]) or "-",
             "퇴실 예정일": item["move_out_due_date"] or "-", "재확인일": item["next_check_date"] or "-", "다음 연락일": item["next_contact_date"] or "-", "메모": item["listing_note"] or "-",
         }
@@ -266,6 +296,14 @@ def render_dashboard(go_to_listing) -> None:
         column.metric(label, value)
         if label == "재확인 관리":
             column.caption(f"도래·지연 {recheck_due_or_overdue}건 · 7일 이내 {recheck_upcoming}건")
+
+    recheck_rows = _recheck_management_rows(all_listings)
+    with st.expander(f"재확인 대상 매물 보기 · {len(recheck_rows)}건", expanded=False):
+        st.caption("오늘·지연 재확인과 오늘 다음 날부터 7일 이내 예정 매물입니다.")
+        if recheck_rows:
+            st.dataframe(recheck_rows, width="stretch", hide_index=True)
+        else:
+            st.info("오늘부터 7일 이내에 재확인할 현재 매물이 없습니다.")
 
     st.caption(f"데이터 파일: {DATABASE_PATH} · 현재 매물 {len(all_listings)}건")
     if not all_listings:
