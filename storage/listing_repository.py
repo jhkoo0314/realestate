@@ -10,6 +10,26 @@ from storage.database import DATABASE_PATH, ensure_database_schema, get_connecti
 from services.record_number import record_id_from_query
 
 
+def mark_past_due_move_out_listings_vacant(reference_date: date | None = None, path: Path = DATABASE_PATH) -> int:
+    """지난 퇴실 예정일의 현재 `퇴실 예정` 매물만 공실로 바꾼다."""
+    ensure_database_schema(path)
+    기준일 = (reference_date or date.today()).isoformat()
+    connection = get_connection(path)
+    try:
+        with connection:
+            return connection.execute(
+                """UPDATE listings
+                   SET listing_status = '공실'
+                   WHERE closed_date IS NULL
+                     AND listing_status = '퇴실 예정'
+                     AND move_out_due_date IS NOT NULL
+                     AND move_out_due_date < ?""",
+                (기준일,),
+            ).rowcount
+    finally:
+        connection.close()
+
+
 def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     """계약·상담에 연결할 현재·과거 매물 회차를 찾는다."""
     ensure_database_schema(path)

@@ -13,12 +13,14 @@ from storage.building_repository import (
     get_building_management_detail,
     get_building_password,
     get_building_units,
+    get_current_listing_price,
     get_unit_listing_history,
     get_unit_management_detail,
     get_unit_password,
     search_buildings,
     rename_unit,
     update_building_management_detail,
+    update_current_listing_price,
     update_current_listing_option_note,
     update_unit_management_detail,
 )
@@ -195,6 +197,34 @@ def _render_unit_detail(unit_id: int) -> None:
                 create_daily_backup()
                 st.success(f"{old_unit_number}호를 {new_unit_number.strip().removesuffix('호')}호로 정정했습니다. 연결된 이력은 유지됩니다.")
                 st.rerun()
+
+    current_listing = get_current_listing_price(unit_id)
+    with st.expander("최신 매물 가격 수정", expanded=True):
+        if current_listing is None:
+            st.info("현재 운영 중인 매물이 없어 가격을 수정할 수 없습니다. 과거 매물 조건은 아래 이력에서만 확인할 수 있습니다.")
+        else:
+            st.caption(f"수정 대상: {listing_number(current_listing['id'])} · 현재 운영 중인 매물만 변경하며, 과거 매물 이력은 유지됩니다.")
+            with st.form(f"current_listing_price_{unit_id}"):
+                deposit_column, rent_column = st.columns(2)
+                with deposit_column:
+                    deposit = st.number_input("보증금 (만원, 선택)", min_value=0, step=10, value=current_listing["deposit_manwon"], key=f"current_deposit_{unit_id}")
+                with rent_column:
+                    monthly_rent = st.number_input("월세 (만원, 선택)", min_value=0, step=1, value=current_listing["monthly_rent_manwon"], key=f"current_monthly_rent_{unit_id}")
+                submitted = st.form_submit_button("보증금·월세 저장", type="primary")
+            if submitted:
+                if deposit is not None and deposit <= 0:
+                    st.error("보증금을 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
+                elif monthly_rent is not None and monthly_rent <= 0:
+                    st.error("월세를 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
+                else:
+                    try:
+                        updated_listing_id = update_current_listing_price(unit_id, deposit, monthly_rent)
+                    except ValueError as error:
+                        st.error(str(error))
+                    else:
+                        create_daily_backup()
+                        st.success(f"{listing_number(updated_listing_id)}의 보증금·월세를 저장했습니다.")
+                        st.rerun()
 
     with st.expander("이번 매물에만 다른 옵션"):
         st.caption("이 내용은 호실 기본 옵션을 바꾸지 않고 현재 매물 기록에만 남습니다.")

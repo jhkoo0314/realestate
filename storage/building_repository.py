@@ -112,6 +112,47 @@ def update_current_listing_option_note(unit_id: int, option_change_note: str | N
     finally: connection.close()
 
 
+def get_current_listing_price(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
+    """호실의 현재 운영 중인 매물 가격만 조회한다."""
+    require_database(path); connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """SELECT id, deposit_manwon, monthly_rent_manwon
+            FROM listings
+            WHERE unit_id=? AND closed_date IS NULL AND listing_status NOT IN ('계약 완료', '종료')
+            ORDER BY received_date DESC, id DESC LIMIT 1""",
+            (unit_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally: connection.close()
+
+
+def update_current_listing_price(
+    unit_id: int,
+    deposit_manwon: int | None,
+    monthly_rent_manwon: int | None,
+    path: Path = DATABASE_PATH,
+) -> int:
+    """호실의 현재 운영 중인 매물 가격만 수정하고 과거 이력은 보존한다."""
+    require_database(path); connection = get_connection(path)
+    try:
+        with connection:
+            row = connection.execute(
+                """SELECT id FROM listings
+                WHERE unit_id=? AND closed_date IS NULL AND listing_status NOT IN ('계약 완료', '종료')
+                ORDER BY received_date DESC, id DESC LIMIT 1""",
+                (unit_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("가격을 수정할 현재 운영 매물이 없습니다.")
+            connection.execute(
+                "UPDATE listings SET deposit_manwon=?, monthly_rent_manwon=? WHERE id=?",
+                (deposit_manwon, monthly_rent_manwon, row["id"]),
+            )
+            return row["id"]
+    finally: connection.close()
+
+
 def get_unit_listing_history(unit_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     require_database(path); connection = get_connection(path)
     try:

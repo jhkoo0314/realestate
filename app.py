@@ -3,6 +3,7 @@
 import streamlit as st
 
 from services.backup_service import get_backup_status
+from services.listing_status_service import apply_past_due_move_out_statuses
 from ui.building_management import render_building_management
 from ui.advertisement_management import render_advertisement_management
 from ui.contract_management import render_contract_management
@@ -108,6 +109,10 @@ def main() -> None:
     if "selected_page" not in st.session_state:
         st.session_state.selected_page = PAGE_TODAY
     apply_task_shortcut()
+    try:
+        past_due_move_out_count = apply_past_due_move_out_statuses()
+    except FileNotFoundError:
+        past_due_move_out_count = 0
 
     title_column, action_column = st.columns([4, 1])
     with title_column:
@@ -118,6 +123,8 @@ def main() -> None:
 
     st.radio("주요 메뉴", PAGES, horizontal=True, key="selected_page", label_visibility="collapsed")
     st.markdown("<div class='status-line'>실행 상태: 신규 등록·재등록·현재 매물 수정 가능 · 매물 현황 리스트에서 조회·필터와 확인 업무를 처리할 수 있습니다.</div>", unsafe_allow_html=True)
+    if past_due_move_out_count:
+        st.info(f"퇴실 예정일이 지난 매물 {past_due_move_out_count}건을 공실로 자동 변경했습니다.")
     render_backup_status()
 
     if st.session_state.selected_page == PAGE_TODAY:
