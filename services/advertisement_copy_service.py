@@ -266,6 +266,12 @@ def templates_for_room_type(room_type: str) -> list[str]:
     return preferred + [name for name in AD_TEMPLATES if name not in preferred]
 
 
+def room_title_templates_for_room_type(room_type: str) -> list[str]:
+    """방 형태에 맞는 광고 제목 템플릿만 돌려준다."""
+    title_family = "원룸" if room_type == "원룸" else "쓰리룸" if room_type == "쓰리룸" else "투룸"
+    return ROOM_TITLE_TEMPLATES[title_family]
+
+
 def generate_ad_copy(
     *,
     room_type: str,
@@ -343,7 +349,7 @@ def generate_ad_copy(
     if include_actual_listing_notice:
         notices.insert(0, "본 매물은 실매물입니다.")
     if include_actual_photo_notice:
-        notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 호실 촬영본이며 촬영 시점에 따라 일부 차이가 있을 수 있습니다.")
+        notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 해당 호실 촬영본입니다. 촬영 이후 청소·가구 배치·시설 상태 등에 일부 변동이 있을 수 있으므로 방문 시 최종 확인 부탁드립니다.")
     lines.extend(["", "📌 안내사항"])
     lines.extend(f"✔ {notice}" for notice in notices)
     return {"title": title, "body": "\n".join(lines)}
@@ -360,6 +366,7 @@ def generate_lead_ad_copy(
     *,
     location: str,
     room_type: str,
+    title_template: str,
     transaction_type: str,
     deposit: int | None,
     rent: int | None,
@@ -367,7 +374,7 @@ def generate_lead_ad_copy(
     available_date: str,
     top_message: str,
     summary_points: list[str],
-    building_highlight: str | None,
+    building_highlights: list[str],
     alternative_message: str,
     include_actual_listing_notice: bool,
     include_actual_photo_notice: bool,
@@ -377,11 +384,15 @@ def generate_lead_ad_copy(
         raise ValueError("방 형태를 다시 선택해 주세요.")
     if transaction_type not in {"월세", "전세", "보증부월세", "가격 문의"}:
         raise ValueError("거래 방식을 다시 선택해 주세요.")
-    if building_highlight not in (None, *BUILDING_HIGHLIGHTS):
+    selected_building_highlights = [highlight for highlight in building_highlights if highlight in BUILDING_HIGHLIGHTS]
+    if len(selected_building_highlights) != len(building_highlights):
         raise ValueError("건물 특장점을 다시 선택해 주세요.")
 
     clean = lambda value: str(value or "").strip()
-    title = " ".join(part for part in (clean(location), room_type) if part) or room_type
+    allowed_title_templates = room_title_templates_for_room_type(room_type)
+    if title_template and title_template not in allowed_title_templates:
+        raise ValueError("방 형태에 맞는 제목 템플릿을 선택해 주세요.")
+    title = clean(title_template) or " ".join(part for part in (clean(location), room_type) if part) or room_type
     summaries = [clean(point) for point in summary_points if clean(point)][:3]
     summary_lines = [f"# {point}" for point in summaries] or ["# 확인된 매물 조건을 문의로 안내해드립니다."]
 
@@ -407,7 +418,7 @@ def generate_lead_ad_copy(
     if include_actual_listing_notice:
         notices.insert(0, "본 매물은 실매물입니다.")
     if include_actual_photo_notice:
-        notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 호실 촬영본이며 촬영 시점에 따라 일부 차이가 있을 수 있습니다.")
+        notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 해당 호실 촬영본입니다. 촬영 이후 청소·가구 배치·시설 상태 등에 일부 변동이 있을 수 있으므로 방문 시 최종 확인 부탁드립니다.")
 
     lines = [
         clean(top_message) or LEAD_TOP_PRESETS["다양한 매물 비교"],
@@ -419,8 +430,9 @@ def generate_lead_ad_copy(
     lines.extend(f"# {price_part}" for price_part in price_parts)
     lines.extend(["", "◇ 옵션 정보"])
     lines.append(f"# {LEAD_BASE_OPTION_TEXT}")
-    if building_highlight:
-        lines.extend(["", "◇ 건물 특장점", f"# {BUILDING_HIGHLIGHT_SENTENCES[building_highlight]}"])
+    if selected_building_highlights:
+        lines.extend(["", "◇ 건물 특장점"])
+        lines.extend(f"# {BUILDING_HIGHLIGHT_SENTENCES[highlight]}" for highlight in selected_building_highlights)
     lines.extend(["", "☎ 찾으시는 조건이 따로 있으신가요?", "", clean(alternative_message) or LEAD_ALTERNATIVE_PRESETS["기본 상담 유도"], "", "📌 안내사항"])
     lines.extend(f"✔ {notice}" for notice in notices)
     return {"title": title, "body": "\n".join(lines)}

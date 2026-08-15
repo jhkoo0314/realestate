@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.advertisement_copy_service import BUILDING_HIGHLIGHTS, LEAD_ALTERNATIVE_PRESETS, LEAD_BASE_OPTION_TEXT, LEAD_TOP_PRESETS, REGION_SUMMARY_TEMPLATES, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount
+from services.advertisement_copy_service import BUILDING_HIGHLIGHTS, LEAD_ALTERNATIVE_PRESETS, LEAD_BASE_OPTION_TEXT, LEAD_TOP_PRESETS, REGION_SUMMARY_TEMPLATES, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount, room_title_templates_for_room_type
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
 from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
@@ -30,6 +30,11 @@ def _clear_listing_channel_search() -> None:
     """광고 채널 연결 대상 매물 검색을 새로 시작한다."""
     st.session_state.pop("advertisement_listing_query", None)
     st.session_state.pop("advertisement_selected_listing", None)
+
+
+def _apply_ad_copy_preset(preset_key: str, editor_key: str, presets: dict[str, str]) -> None:
+    """프리셋 변경 시 기존 편집값 대신 선택한 문구를 입력칸에 넣는다."""
+    st.session_state[editor_key] = presets[st.session_state[preset_key]]
 
 
 def _render_listing_advertisements(selected: dict) -> None:
@@ -195,6 +200,10 @@ def _render_ad_copy_generator() -> None:
     with transaction_type_column:
         transaction_type = st.selectbox("거래 방식", ["월세", "전세", "보증부월세", "가격 문의"], key="ad_copy_transaction_type")
 
+    title_template = st.selectbox("룸 제목 템플릿", ["기본 제목", *room_title_templates_for_room_type(room_type)], key=f"ad_copy_room_title_template_{room_type}")
+    if title_template != "기본 제목":
+        st.caption("선택한 템플릿이 광고 제목으로 그대로 사용됩니다. 실제 매물 상태와 맞는 문구를 선택해 주세요.")
+
     deposit_column, rent_column, fee_column, available_column = st.columns(4)
     with deposit_column:
         deposit_text = st.text_input("보증금 (만원 · 선택)", placeholder="예: 500", key="ad_copy_deposit")
@@ -206,7 +215,7 @@ def _render_ad_copy_generator() -> None:
         available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
 
     st.markdown("##### 상담 유도 문구")
-    top_preset_name = st.selectbox("상단 상담문구 프리셋", list(LEAD_TOP_PRESETS), key="ad_copy_top_preset")
+    top_preset_name = st.selectbox("상단 상담문구 프리셋", list(LEAD_TOP_PRESETS), key="ad_copy_top_preset", on_change=_apply_ad_copy_preset, args=("ad_copy_top_preset", "ad_copy_top_message", LEAD_TOP_PRESETS))
     top_message = st.text_area("상단 상담문구 수정", value=LEAD_TOP_PRESETS[top_preset_name], key="ad_copy_top_message", height=68)
 
     st.markdown("##### 핵심 요약")
@@ -220,9 +229,9 @@ def _render_ad_copy_generator() -> None:
     st.code("\n".join(f"# {point}" for point in summary_points), language=None)
     st.markdown("##### 옵션 및 특징")
     st.info(f"기본 옵션 문구: {LEAD_BASE_OPTION_TEXT}")
-    building_highlight_choice = st.selectbox("건물 특장점", ["선택 안 함", *BUILDING_HIGHLIGHTS], key="ad_copy_building_highlight")
+    building_highlight_choices = st.multiselect("건물 특장점 (복수 선택)", BUILDING_HIGHLIGHTS, key="ad_copy_building_highlights")
 
-    alternative_preset_name = st.selectbox("대체매물 상담문구 프리셋", list(LEAD_ALTERNATIVE_PRESETS), key="ad_copy_alternative_preset")
+    alternative_preset_name = st.selectbox("대체매물 상담문구 프리셋", list(LEAD_ALTERNATIVE_PRESETS), key="ad_copy_alternative_preset", on_change=_apply_ad_copy_preset, args=("ad_copy_alternative_preset", "ad_copy_alternative_message", LEAD_ALTERNATIVE_PRESETS))
     alternative_message = st.text_area("대체매물 상담문구 수정", value=LEAD_ALTERNATIVE_PRESETS[alternative_preset_name], key="ad_copy_alternative_message", height=88)
     notice_left, notice_right = st.columns(2)
     with notice_left:
@@ -234,6 +243,7 @@ def _render_ad_copy_generator() -> None:
             result = generate_lead_ad_copy(
                 location=location,
                 room_type=room_type,
+                title_template="" if title_template == "기본 제목" else title_template,
                 transaction_type=transaction_type,
                 deposit=parse_optional_amount(deposit_text, "보증금"),
                 rent=parse_optional_amount(rent_text, "월세"),
@@ -241,7 +251,7 @@ def _render_ad_copy_generator() -> None:
                 available_date=available_date,
                 top_message=top_message,
                 summary_points=summary_points,
-                building_highlight=None if building_highlight_choice == "선택 안 함" else building_highlight_choice,
+                building_highlights=building_highlight_choices,
                 alternative_message=alternative_message,
                 include_actual_listing_notice=actual_listing_checked,
                 include_actual_photo_notice=actual_photo_checked,
