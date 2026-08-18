@@ -51,10 +51,18 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
         move_out_due_date = listing["move_out_due_date"]
         if move_out_due_date:
             move_out_date = date.fromisoformat(move_out_due_date)
-            if move_out_date - timedelta(days=7) == reference_date:
-                result["오늘"].append(_row("매물", "퇴실 예정 확인 (D-7 알림)", move_out_due_date, listing, listing["listing_status"], "오늘"))
-        if move_out_due_date == today_text:
-            result["오늘"].append(_row("매물", "퇴실 예정", listing["move_out_due_date"], listing, listing["listing_status"], "오늘"))
+            remaining_days = (move_out_date - reference_date).days
+            if 1 <= remaining_days <= 7:
+                result["오늘"].append(_row(
+                    "매물",
+                    f"퇴실 예정 확인 (D-{remaining_days} 알림)",
+                    move_out_due_date,
+                    listing,
+                    listing["listing_status"],
+                    "오늘",
+                ))
+            elif remaining_days == 0:
+                result["오늘"].append(_row("매물", "퇴실 예정", move_out_due_date, listing, listing["listing_status"], "오늘"))
         for task in listing["tasks"]:
             if task != "재확인 필요":
                 result["상시 확인 필요"].append(_row("매물", task, None, listing, listing["listing_status"], "상시 확인 필요"))
