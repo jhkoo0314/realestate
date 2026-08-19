@@ -56,7 +56,7 @@ def search_listing_rounds(query: str, path: Path = DATABASE_PATH) -> list[dict[s
         connection.close()
 
 
-def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, deposit_min: int | None = None, deposit_max: int | None = None, monthly_rent_min: int | None = None, monthly_rent_max: int | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_availability: list[str] | None = None, listing_holders: list[str] | None = None, listing_holder_query: str = "", task_filter: str | None = None, listing_scope: str = "현재 매물만", path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+def get_current_listings(*, query: str = "", received_start: str | None = None, received_end: str | None = None, deposit_min: int | None = None, deposit_max: int | None = None, monthly_rent_min: int | None = None, monthly_rent_max: int | None = None, statuses: list[str] | None = None, room_types: list[str] | None = None, photo_availability: list[str] | None = None, listing_holders: list[str] | None = None, elevator_statuses: list[str] | None = None, listing_holder_query: str = "", task_filter: str | None = None, listing_scope: str = "현재 매물만", path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
     ensure_database_schema(path); conditions, parameters = ["u.is_active = 1", "b.is_active = 1"], []
     if listing_scope == "현재 매물만":
         conditions.extend(["l.closed_date IS NULL", "l.listing_status NOT IN ('계약 완료', '종료')"])
@@ -81,6 +81,15 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
         if "미입력" in listing_holders:
             holder_conditions.append("(l.listing_holder IS NULL OR TRIM(l.listing_holder) = '')")
         conditions.append(f"({' OR '.join(holder_conditions)})")
+    if elevator_statuses:
+        elevator_conditions = []
+        stored_elevator_statuses = [status for status in elevator_statuses if status != "미입력"]
+        if stored_elevator_statuses:
+            elevator_conditions.append(f"b.has_elevator IN ({', '.join('?' for _ in stored_elevator_statuses)})")
+            parameters.extend(stored_elevator_statuses)
+        if "미입력" in elevator_statuses:
+            elevator_conditions.append("(b.has_elevator IS NULL OR TRIM(b.has_elevator) = '')")
+        conditions.append(f"({' OR '.join(elevator_conditions)})")
     if holder_keyword := listing_holder_query.strip():
         conditions.append("l.listing_holder LIKE ?")
         parameters.append(f"%{holder_keyword}%")

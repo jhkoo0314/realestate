@@ -38,8 +38,6 @@ EXPORT_COLUMNS = [
     ("방문 방법", "access_method", "text"),
     ("방문 비밀번호", "unit_access_password", "text"),
     ("엘리베이터", "has_elevator", "text"),
-    ("주차", "parking_status", "text"),
-    ("호실 옵션", "unit_options", "text"),
     ("건물 내부 메모", "building_internal_note", "text"),
     ("호실 내부 메모", "unit_internal_note", "text"),
     ("매물 메모", "listing_note", "text"),

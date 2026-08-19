@@ -32,17 +32,16 @@ from storage.listing_write_repository import deactivate_unit, delete_unit, get_c
 
 INPUT_KEYS = [
     "building_name", "lot_address", "lot_area", "lot_number", "common_entrance_password",
-    "has_elevator", "parking_status", "building_internal_note", "unit_number", "floor_number",
+    "has_elevator", "building_internal_note", "unit_number", "floor_number",
     "room_type", "direction", "access_method", "unit_access_password",
-    "unit_highlights", "unit_options", "listing_status", "deposit_manwon", "monthly_rent_manwon",
+    "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
-    "has_listing_photos", "cleaning_status", "wallpaper_status", "repair_status",
+    "has_listing_photos",
     "listing_holder_choice", "listing_holder_custom", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
 UNIT_OPTION_LABELS = ["냉장고", "세탁기", "전자레인지", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
-SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 REGISTRATION_ROOM_TYPES = ROOM_TYPES
 
 
@@ -115,18 +114,14 @@ def _format_phone_input(key: str) -> None:
 
 
 def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
-    """현황 리스트의 자동 업무 계산에 쓰는 관리 상태를 같은 이름으로 입력한다."""
+    """사진 보유 여부와 재확인 예정일을 입력한다."""
     values = values or {}
     st.markdown("##### 확인·관리 사항")
-    st.caption("사진 보유 여부와 아래 상태를 저장하면 현황리스트의 ‘해야 할 일’이 자동으로 표시됩니다. 할 일을 따로 입력하지 않습니다.")
-    left, middle, right = st.columns(3)
+    st.caption("사진 보유 여부와 재확인 예정일을 저장하면 현황 조회와 확인 업무에 반영됩니다.")
+    left, right = st.columns(2)
     with left:
         st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=_status_index(PHOTO_AVAILABILITY, values.get("has_listing_photos")), key=f"{key_prefix}_has_listing_photos", help="없음이면 사진 촬영 필요, 확인 필요면 사진 확인 필요로 자동 표시됩니다.")
-        st.selectbox("청소 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("cleaning_status")), key=f"{key_prefix}_cleaning_status")
-    with middle:
-        st.selectbox("도배 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("wallpaper_status")), key=f"{key_prefix}_wallpaper_status")
     with right:
-        st.selectbox("수리 상태", SITE_PREPARATION_STATUSES, index=_status_index(SITE_PREPARATION_STATUSES, values.get("repair_status")), key=f"{key_prefix}_repair_status")
         st.date_input("재확인 예정일", value=_date_value(values.get("next_check_date")), key=f"{key_prefix}_next_check_date")
 
 
@@ -235,11 +230,7 @@ def _render_new_building_fields() -> None:
     st.caption("건물명을 모르면 비워 두세요. 지번 지역과 번지 번호, 호수로 등록하며 목록에는 `건물명 미입력`으로 표시됩니다.")
     st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password")
     with st.expander("건물 상세정보"):
-        detail_left, detail_right = st.columns(2)
-        with detail_left:
-            st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], key="registration_has_elevator")
-        with detail_right:
-            st.selectbox("주차", ["확인 필요", "가능", "제한적", "불가"], key="registration_parking_status")
+        st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], key="registration_has_elevator")
         st.text_area("건물 내부 메모 (외부 공유 금지)", key="registration_building_internal_note")
 
 
@@ -284,17 +275,10 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
         if duplicate_unit:
             st.error(f"{unit_number}는 이미 등록된 호실입니다. 위 목록에서 해당 호실의 ‘최신 정보 수정’을 선택해 주세요.")
 
-    st.markdown("##### 호실 옵션")
-    st.session_state["registration_unit_options"] = _render_unit_option_checkboxes("registration_unit")
-
     with st.expander("호실 상세정보"):
-        detail_left, detail_right = st.columns(2)
-        with detail_left:
-            st.selectbox("방향", ["확인 필요", "동", "서", "남", "북", "남동", "남서", "북동", "북서"], key="registration_direction")
-            st.selectbox("방문 방법", ["확인 필요", "비밀번호", "열쇠", "세입자 협의", "관리인 문의"], key="registration_access_method")
-            st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password")
-        with detail_right:
-            st.text_area("구조상 장점", key="registration_unit_highlights", placeholder="예: 안방 양창, 수납 넉넉함")
+        st.selectbox("방향", ["확인 필요", "동", "서", "남", "북", "남동", "남서", "북동", "북서"], key="registration_direction")
+        st.selectbox("방문 방법", ["확인 필요", "비밀번호", "열쇠", "세입자 협의", "관리인 문의"], key="registration_access_method")
+        st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password")
 
     st.divider()
     st.markdown("#### 4. 이번 매물 조건")
@@ -435,9 +419,9 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "available_from_date": st.session_state.get("edit_available_from_date"),
             "move_out_due_date": st.session_state.get("edit_move_out_due_date"),
             "has_listing_photos": st.session_state.get("edit_has_listing_photos"),
-            "cleaning_status": st.session_state.get("edit_cleaning_status"),
-            "wallpaper_status": st.session_state.get("edit_wallpaper_status"),
-            "repair_status": st.session_state.get("edit_repair_status"),
+            "cleaning_status": listing["cleaning_status"],
+            "wallpaper_status": listing["wallpaper_status"],
+            "repair_status": listing["repair_status"],
             "listing_holder_choice": st.session_state.get("edit_listing_holder_choice"),
             "listing_holder_custom": st.session_state.get("edit_listing_holder_custom"),
             "next_check_date": st.session_state.get("edit_next_check_date"),
@@ -567,9 +551,6 @@ def _render_relisting_form(unit_id: int) -> None:
             "received_date": st.session_state.get("relisting_received_date"),
             "move_out_due_date": st.session_state.get("relisting_move_out_due_date"),
             "has_listing_photos": st.session_state.get("relisting_has_listing_photos"),
-            "cleaning_status": st.session_state.get("relisting_cleaning_status"),
-            "wallpaper_status": st.session_state.get("relisting_wallpaper_status"),
-            "repair_status": st.session_state.get("relisting_repair_status"),
             "listing_holder_choice": st.session_state.get("relisting_listing_holder_choice"),
             "listing_holder_custom": st.session_state.get("relisting_listing_holder_custom"),
             "next_check_date": st.session_state.get("relisting_next_check_date"),

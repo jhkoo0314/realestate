@@ -28,7 +28,7 @@ def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
         "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_availability", "dashboard_task",
-        "dashboard_listing_holders", "dashboard_listing_holder_query",
+        "dashboard_listing_holders", "dashboard_elevator_statuses", "dashboard_listing_holder_query",
         "dashboard_deposit_min", "dashboard_deposit_max", "dashboard_monthly_rent_min", "dashboard_monthly_rent_max",
     ):
         st.session_state.pop(key, None)
@@ -126,7 +126,6 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "사진 보유": _photo_availability_text(item), "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
-            "해야 할 일": ", ".join(item["tasks"]) or "-",
             "퇴실 예정일": item["move_out_due_date"] or "-", "재확인일": item["next_check_date"] or "-", "다음 연락일": item["next_contact_date"] or "-", "메모": item["listing_note"] or "-",
         }
         if show_closure:
@@ -330,7 +329,11 @@ def render_dashboard(go_to_listing) -> None:
             room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
         with filter_columns[3]:
             photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
-        listing_holders = st.multiselect("매물 보유처", ["미입력"] + LISTING_HOLDERS[:-1], key="dashboard_listing_holders")
+        holder_column, elevator_column = st.columns(2)
+        with holder_column:
+            listing_holders = st.multiselect("매물 보유처", ["미입력"] + LISTING_HOLDERS[:-1], key="dashboard_listing_holders")
+        with elevator_column:
+            elevator_statuses = st.multiselect("엘리베이터 여부", ["있음", "없음", "확인 필요", "미입력"], key="dashboard_elevator_statuses")
         listing_holder_query = st.text_input("직접 입력 보유처 검색", key="dashboard_listing_holder_query")
         deposit_min_column, deposit_max_column, rent_min_column, rent_max_column = st.columns(4)
         with deposit_min_column:
@@ -377,6 +380,7 @@ def render_dashboard(go_to_listing) -> None:
         room_types=room_types,
         photo_availability=photo_availability,
         listing_holders=listing_holders,
+        elevator_statuses=elevator_statuses,
         listing_holder_query=listing_holder_query,
         task_filter=None if task_filter == "전체" else task_filter,
         listing_scope=listing_scope,
