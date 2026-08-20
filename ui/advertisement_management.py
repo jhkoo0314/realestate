@@ -6,7 +6,7 @@ from datetime import date
 
 import streamlit as st
 
-from services.advertisement_copy_service import BUILDING_HIGHLIGHTS, LEAD_ALTERNATIVE_PRESETS, LEAD_BASE_OPTION_TEXT, LEAD_TOP_PRESETS, REGION_SUMMARY_TEMPLATES, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount, room_title_templates_for_room_type
+from services.advertisement_copy_service import PROPERTY_POSITIONING_COPY, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount, room_title_templates_for_room_type
 from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
 from services.record_number import listing_number
 from storage.advertisement_repository import get_advertisements
@@ -30,11 +30,6 @@ def _clear_listing_channel_search() -> None:
     """광고 채널 연결 대상 매물 검색을 새로 시작한다."""
     st.session_state.pop("advertisement_listing_query", None)
     st.session_state.pop("advertisement_selected_listing", None)
-
-
-def _apply_ad_copy_preset(preset_key: str, editor_key: str, presets: dict[str, str]) -> None:
-    """프리셋 변경 시 기존 편집값 대신 선택한 문구를 입력칸에 넣는다."""
-    st.session_state[editor_key] = presets[st.session_state[preset_key]]
 
 
 def _render_listing_advertisements(selected: dict) -> None:
@@ -189,7 +184,7 @@ def _render_advertisement_registration() -> None:
 def _render_ad_copy_generator() -> None:
     """매물 DB와 연결하지 않고 직접 입력한 사실만으로 광고 문구를 만든다."""
     st.markdown("#### 광고 문구 만들기")
-    st.caption("매물 DB와 연결하지 않습니다. 지금 확인한 사실만 직접 입력해 상담 리드형 광고문을 만들며, 입력값과 생성 결과는 저장되지 않습니다.")
+    st.caption("매물 DB와 연결하지 않습니다. 신축급·구축과 강조할 점을 직접 선택하면, 지금 확인한 사실만으로 광고문을 만듭니다. 입력값과 생성 결과는 저장되지 않습니다.")
     st.warning("비밀번호·연락처·내부 메모는 입력하거나 광고문에 넣지 마세요.")
 
     location_column, room_type_column, transaction_type_column = st.columns([2, 1, 1])
@@ -214,25 +209,15 @@ def _render_ad_copy_generator() -> None:
     with available_column:
         available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
 
-    st.markdown("##### 상담 유도 문구")
-    top_preset_name = st.selectbox("상단 상담문구 프리셋", list(LEAD_TOP_PRESETS), key="ad_copy_top_preset", on_change=_apply_ad_copy_preset, args=("ad_copy_top_preset", "ad_copy_top_message", LEAD_TOP_PRESETS))
-    top_message = st.text_area("상단 상담문구 수정", value=LEAD_TOP_PRESETS[top_preset_name], key="ad_copy_top_message", height=68)
-
-    st.markdown("##### 핵심 요약")
-    summary_region, summary_template_column = st.columns(2)
-    with summary_region:
-        summary_region_name = st.selectbox("핵심 요약 지역", list(REGION_SUMMARY_TEMPLATES), key="ad_copy_summary_region")
-    with summary_template_column:
-        summary_template_name = st.selectbox("지역 핵심요약 템플릿", list(REGION_SUMMARY_TEMPLATES[summary_region_name]), key=f"ad_copy_summary_template_{summary_region_name}")
-    summary_points = REGION_SUMMARY_TEMPLATES[summary_region_name][summary_template_name]
-    st.caption("선택한 지역 템플릿의 핵심 요약이 그대로 광고문에 들어갑니다. 실제 매물 주소가 해당 지역인지 확인한 경우에만 사용하세요.")
-    st.code("\n".join(f"# {point}" for point in summary_points), language=None)
-    st.markdown("##### 옵션 및 특징")
-    st.info(f"기본 옵션 문구: {LEAD_BASE_OPTION_TEXT}")
-    building_highlight_choices = st.multiselect("건물 특장점 (복수 선택)", BUILDING_HIGHLIGHTS, key="ad_copy_building_highlights")
-
-    alternative_preset_name = st.selectbox("대체매물 상담문구 프리셋", list(LEAD_ALTERNATIVE_PRESETS), key="ad_copy_alternative_preset", on_change=_apply_ad_copy_preset, args=("ad_copy_alternative_preset", "ad_copy_alternative_message", LEAD_ALTERNATIVE_PRESETS))
-    alternative_message = st.text_area("대체매물 상담문구 수정", value=LEAD_ALTERNATIVE_PRESETS[alternative_preset_name], key="ad_copy_alternative_message", height=88)
+    st.markdown("##### 매물 성격")
+    property_condition = st.radio("매물 컨디션", ["신축급", "구축"], horizontal=True, key="ad_copy_property_condition")
+    positioning_types = list(PROPERTY_POSITIONING_COPY[property_condition])
+    positioning_type = st.radio("이 매물에서 가장 강조할 점", positioning_types, horizontal=True, key=f"ad_copy_positioning_type_{property_condition}")
+    special_label = "이 매물의 특별한 점 *" if positioning_type == "특별매물" else "특별 포인트 추가 (선택)"
+    special_placeholder = "예: 안방 양창으로 개방감이 좋음" if positioning_type == "특별매물" else "예: 대형 붙박이장과 길게 빠진 베란다 공간"
+    special_point = st.text_input(special_label, placeholder=special_placeholder, key="ad_copy_special_point")
+    option_text = st.text_input("옵션 문구 수정 (선택)", placeholder="예: 냉장고 · 세탁기 · 에어컨 · TV", key="ad_copy_option_text")
+    st.caption("일반 매물은 컨디션과 강조할 점만 선택하면 됩니다. 옵션을 입력하지 않으면 생활 기본 옵션 문구가 적용되며, 특별포인트와 수정 옵션은 실제로 확인한 경우에만 입력하세요.")
     notice_left, notice_right = st.columns(2)
     with notice_left:
         actual_listing_checked = st.checkbox("실매물 확인됨 — ‘본 매물은 실매물입니다’ 포함", key="ad_copy_actual_listing")
@@ -249,10 +234,10 @@ def _render_ad_copy_generator() -> None:
                 rent=parse_optional_amount(rent_text, "월세"),
                 management_fee=parse_optional_amount(management_fee_text, "관리비"),
                 available_date=available_date,
-                top_message=top_message,
-                summary_points=summary_points,
-                building_highlights=building_highlight_choices,
-                alternative_message=alternative_message,
+                property_condition=property_condition,
+                positioning_type=positioning_type,
+                special_point=special_point,
+                option_text=option_text,
                 include_actual_listing_notice=actual_listing_checked,
                 include_actual_photo_notice=actual_photo_checked,
             )

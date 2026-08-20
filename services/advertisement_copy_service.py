@@ -196,6 +196,50 @@ BUILDING_HIGHLIGHT_SENTENCES = {
     "주차 편리함": "주차가 편리해 차량 이용을 고려하는 분께 적합",
 }
 
+# 광고 상단은 지역 홍보 대신 매물의 성격을 짧게 설명한다.
+# 신축급/구축과 강조유형은 사용자가 직접 선택하며, DB 값으로 추정하지 않는다.
+PROPERTY_POSITIONING_COPY = {
+    "신축급": {
+        "컨디션": {
+            "headline": "깔끔한 컨디션을 중요하게 본다면 살펴볼 신축급 {room_type}",
+            "points": ["깔끔하게 관리된 신축급 컨디션", "깨끗한 주거환경을 중요하게 보는 분께 추천"],
+        },
+        "공간": {
+            "headline": "여유 있는 공간감이 장점인 신축급 {room_type}",
+            "points": ["여유 있는 공간감이 장점인 구조", "방 크기와 실사용 공간을 중요하게 보는 분께 추천"],
+        },
+        "특별매물": {
+            "headline": "특별한 구성을 직접 확인해 볼 수 있는 신축급 {room_type}",
+            "points": [],
+        },
+    },
+    "구축": {
+        "가격": {
+            "headline": "주거비 부담을 낮춰 찾는 분께 좋은 실속형 {room_type}",
+            "points": ["부담을 낮춘 임대조건이 장점인 매물", "주거비를 중요하게 보는 분께 적합"],
+        },
+        "공간": {
+            "headline": "가격과 공간을 함께 고려하기 좋은 {room_type}",
+            "points": ["여유 있는 실사용 공간이 장점인 매물", "방 크기를 중요하게 보는 분께 비교하기 좋은 조건"],
+        },
+        "계약조건": {
+            "headline": "필요한 거주기간과 조건을 맞춰보기 좋은 {room_type}",
+            "points": ["거주기간과 입주 일정을 함께 확인해 볼 수 있는 매물", "거주기간과 입주일정을 중요하게 보는 분께 적합"],
+        },
+        "특별매물": {
+            "headline": "특별한 구성을 직접 확인해 볼 수 있는 {room_type}",
+            "points": [],
+        },
+    },
+}
+
+LEAD_DEFAULT_OPTION_TEXT = "냉장고, 세탁기, 에어컨 등 생활 기본 옵션을 갖춘 실용적인 구성"
+LEAD_COMPARISON_CONSULTATION_TEXT = (
+    "다양한 원룸·투룸 매물을 보유하고 있어",
+    "원하시는 조건에 맞춰 비교 상담해드립니다.",
+)
+LEAD_TOP_INTRO_TEXT = "찾으시는 조건에 맞춰 다양한 매물을 비교해드립니다."
+
 # 지역 핵심요약은 광고에 바로 쓰는 고정 템플릿이다. 개별 매물의 거리·주차·옵션은
 # 확인 전에는 넣지 않고, 선택한 지역과 실제 주소가 맞는 경우에만 사용한다.
 REGION_SUMMARY_TEMPLATES = {
@@ -372,29 +416,35 @@ def generate_lead_ad_copy(
     rent: int | None,
     management_fee: int | None,
     available_date: str,
-    top_message: str,
-    summary_points: list[str],
-    building_highlights: list[str],
-    alternative_message: str,
+    property_condition: str,
+    positioning_type: str,
+    special_point: str,
+    option_text: str,
     include_actual_listing_notice: bool,
     include_actual_photo_notice: bool,
 ) -> dict[str, str]:
-    """직접 입력한 확인 정보만으로 상담 리드형 7블록 광고문을 만든다."""
+    """직접 선택한 매물 성격과 확인된 사실만으로 광고문을 만든다."""
     if room_type not in ROOM_TYPES:
         raise ValueError("방 형태를 다시 선택해 주세요.")
     if transaction_type not in {"월세", "전세", "보증부월세", "가격 문의"}:
         raise ValueError("거래 방식을 다시 선택해 주세요.")
-    selected_building_highlights = [highlight for highlight in building_highlights if highlight in BUILDING_HIGHLIGHTS]
-    if len(selected_building_highlights) != len(building_highlights):
-        raise ValueError("건물 특장점을 다시 선택해 주세요.")
+    if property_condition not in PROPERTY_POSITIONING_COPY:
+        raise ValueError("매물 컨디션을 신축급 또는 구축으로 선택해 주세요.")
+    positioning = PROPERTY_POSITIONING_COPY[property_condition].get(positioning_type)
+    if positioning is None:
+        raise ValueError("선택한 매물 컨디션에 맞는 강조유형을 선택해 주세요.")
 
     clean = lambda value: str(value or "").strip()
     allowed_title_templates = room_title_templates_for_room_type(room_type)
     if title_template and title_template not in allowed_title_templates:
         raise ValueError("방 형태에 맞는 제목 템플릿을 선택해 주세요.")
     title = clean(title_template) or " ".join(part for part in (clean(location), room_type) if part) or room_type
-    summaries = [clean(point) for point in summary_points if clean(point)][:3]
-    summary_lines = [f"# {point}" for point in summaries] or ["# 확인된 매물 조건을 문의로 안내해드립니다."]
+    cleaned_special_point = clean(special_point)
+    if positioning_type == "특별매물" and not cleaned_special_point:
+        raise ValueError("특별매물은 이 매물의 특별한 점을 한 줄로 입력해 주세요.")
+    positioning_points = [point.format(room_type=room_type) for point in positioning["points"]]
+    if cleaned_special_point:
+        positioning_points.append(cleaned_special_point)
 
     price_parts: list[str] = []
     if transaction_type == "전세":
@@ -421,18 +471,22 @@ def generate_lead_ad_copy(
         notices.insert(1 if include_actual_listing_notice else 0, "사진은 실제 해당 호실 촬영본입니다. 촬영 이후 청소·가구 배치·시설 상태 등에 일부 변동이 있을 수 있으므로 방문 시 최종 확인 부탁드립니다.")
 
     lines = [
-        clean(top_message) or LEAD_TOP_PRESETS["다양한 매물 비교"],
-        "", "────────────", "", "◇ 핵심 요약",
-        *summary_lines,
-        "", "◇ 위치 정보", f"# {clean(location) or '위치는 문의로 확인해 주세요.'}",
+        LEAD_TOP_INTRO_TEXT,
+        "",
+        "────────────",
+        "",
+        positioning["headline"].format(room_type=room_type),
+        "",
+        "① 이 매물의 포인트",
     ]
-    lines.extend(["", "◇ 가격 정보"])
-    lines.extend(f"# {price_part}" for price_part in price_parts)
-    lines.extend(["", "◇ 옵션 정보"])
-    lines.append(f"# {LEAD_BASE_OPTION_TEXT}")
-    if selected_building_highlights:
-        lines.extend(["", "◇ 건물 특장점"])
-        lines.extend(f"# {BUILDING_HIGHLIGHT_SENTENCES[highlight]}" for highlight in selected_building_highlights)
-    lines.extend(["", "☎ 찾으시는 조건이 따로 있으신가요?", "", clean(alternative_message) or LEAD_ALTERNATIVE_PRESETS["기본 상담 유도"], "", "📌 안내사항"])
+    lines.extend(f"• {point}" for point in positioning_points)
+    lines.extend(["", "② 조건"])
+    lines.extend(price_parts)
+    lines.extend(["", "③ 위치", clean(location) or "위치는 문의로 확인해 주세요."])
+    lines.extend(["", "④ 옵션", clean(option_text) or LEAD_DEFAULT_OPTION_TEXT])
+    lines.extend([
+        "", "⑤ 비교 상담", *LEAD_COMPARISON_CONSULTATION_TEXT,
+        "", "📌 안내사항",
+    ])
     lines.extend(f"✔ {notice}" for notice in notices)
     return {"title": title, "body": "\n".join(lines)}
