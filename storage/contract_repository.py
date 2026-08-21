@@ -87,3 +87,74 @@ def delete_contract(contract_id: int, path: Path = DATABASE_PATH) -> None:
             if connection.execute("DELETE FROM contracts WHERE id = ?", (contract_id,)).rowcount != 1:
                 raise ValueError("삭제할 계약 기록을 찾을 수 없습니다.")
     finally: connection.close()
+
+
+def get_contract_activities(contract_id: int, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        rows = connection.execute(
+            """SELECT id AS activity_id, contract_id, activity_date, activity_stage, activity_note,
+                      contract_status_after, created_at
+               FROM contract_activities WHERE contract_id=? ORDER BY activity_date DESC, id DESC""",
+            (contract_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally: connection.close()
+
+
+def _refresh_contract_activity_summary(connection: Any, contract_id: int) -> None:
+    """가장 최근 계약 단계 이력의 상태만 계약 요약에 반영한다."""
+    latest = connection.execute(
+        """SELECT activity_date, contract_status_after FROM contract_activities
+           WHERE contract_id=? ORDER BY activity_date DESC, id DESC LIMIT 1""",
+        (contract_id,),
+    ).fetchone()
+    if latest is None:
+        return
+    contract = connection.execute("SELECT listing_id FROM contracts WHERE id=?", (contract_id,)).fetchone()
+    if contract is None:
+        raise ValueError("계약 기록을 찾을 수 없습니다.")
+    connection.execute("UPDATE contracts SET contract_status=? WHERE id=?", (latest["contract_status_after"], contract_id))
+    _apply_linked_listing_status(connection, contract["listing_id"], latest["contract_status_after"])
+
+
+def add_contract_activity(contract_id: int, activity: dict[str, Any], path: Path = DATABASE_PATH) -> int:
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("SELECT 1 FROM contracts WHERE id=?", (contract_id,)).fetchone() is None:
+                raise ValueError("계약 기록을 찾을 수 없습니다.")
+            cursor = connection.execute(
+                """INSERT INTO contract_activities
+                   (contract_id, activity_date, activity_stage, activity_note, contract_status_after)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (contract_id, activity["activity_date"], activity["activity_stage"], activity.get("activity_note"), activity["contract_status_after"]),
+            )
+            _refresh_contract_activity_summary(connection, contract_id)
+            return cursor.lastrowid
+    finally: connection.close()
+
+
+def update_contract_activity(activity_id: int, contract_id: int, activity: dict[str, Any], path: Path = DATABASE_PATH) -> None:
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute(
+                """UPDATE contract_activities
+                   SET activity_date=?, activity_stage=?, activity_note=?, contract_status_after=?
+                   WHERE id=? AND contract_id=?""",
+                (activity["activity_date"], activity["activity_stage"], activity.get("activity_note"), activity["contract_status_after"], activity_id, contract_id),
+            ).rowcount != 1:
+                raise ValueError("수정할 계약 단계 이력을 찾을 수 없습니다.")
+            _refresh_contract_activity_summary(connection, contract_id)
+    finally: connection.close()
+
+
+def delete_contract_activity(activity_id: int, contract_id: int, path: Path = DATABASE_PATH) -> None:
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            if connection.execute("DELETE FROM contract_activities WHERE id=? AND contract_id=?", (activity_id, contract_id)).rowcount != 1:
+                raise ValueError("삭제할 계약 단계 이력을 찾을 수 없습니다.")
+            _refresh_contract_activity_summary(connection, contract_id)
+    finally: connection.close()

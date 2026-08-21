@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 import streamlit as st
 
@@ -51,6 +52,7 @@ def _clear_registration_inputs() -> None:
     for index in range(len(UNIT_OPTION_LABELS)):
         st.session_state.pop(f"registration_unit_option_{index}", None)
     st.session_state.pop("registration_unit_options_other", None)
+    st.session_state.pop("registration_auto_floor_number", None)
     st.session_state.pop("pending_registration", None)
 
 
@@ -111,6 +113,26 @@ def _status_index(options: list[str], value: str | None) -> int:
 
 def _format_phone_input(key: str) -> None:
     st.session_state[key] = format_phone_number(str(st.session_state.get(key, "")))
+
+
+def _floor_from_unit_number(unit_number: str | None) -> int | None:
+    """일반적인 세 자리 이상 호수(302, 1001)에서 층수를 안전하게 추정한다."""
+    matched = re.fullmatch(r"\s*(\d{3,})(?:호)?\s*", str(unit_number or ""))
+    return int(matched.group(1)[:-2]) if matched else None
+
+
+def _fill_floor_from_unit_number() -> None:
+    """호수에서 자동으로 넣은 값만 다음 호수 입력 때 갱신하고 직접 입력값은 보존한다."""
+    floor = _floor_from_unit_number(st.session_state.get("registration_unit_number"))
+    if floor is None:
+        return
+    floor_key = "registration_floor_number"
+    auto_key = "registration_auto_floor_number"
+    current_floor = st.session_state.get(floor_key)
+    previous_auto_floor = st.session_state.get(auto_key)
+    if current_floor is None or current_floor == previous_auto_floor:
+        st.session_state[floor_key] = floor
+        st.session_state[auto_key] = floor
 
 
 def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
@@ -263,11 +285,11 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     st.markdown("#### 3. 새 호실 정보")
     unit_left, unit_middle, unit_right = st.columns(3)
     with unit_left:
-        st.text_input("호수 *", key="registration_unit_number", placeholder="예: 302")
+        st.text_input("호수 *", key="registration_unit_number", placeholder="예: 302", on_change=_fill_floor_from_unit_number)
     with unit_middle:
         st.selectbox("룸 형태", REGISTRATION_ROOM_TYPES, key="registration_room_type")
     with unit_right:
-        st.number_input("층", min_value=0, step=1, value=None, key="registration_floor_number")
+        st.number_input("층 (호수 입력 시 자동)", min_value=0, step=1, value=None, key="registration_floor_number")
 
     duplicate_unit = False
     if building and (unit_number := _field_value("unit_number")):
@@ -284,7 +306,7 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
     st.markdown("#### 4. 이번 매물 조건")
     listing_left, listing_middle, listing_right = st.columns(3)
     with listing_left:
-        st.selectbox("매물 상태 *", LISTING_STATUSES, index=1, key="registration_listing_status")
+        st.selectbox("매물 상태 *", LISTING_STATUSES, index=LISTING_STATUSES.index("공실"), key="registration_listing_status")
         st.number_input("보증금 (만원, 선택)", min_value=0, step=10, value=None, key="registration_deposit_manwon")
     with listing_middle:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="registration_availability_type")

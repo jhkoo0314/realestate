@@ -50,7 +50,7 @@ def _base_row(row: dict[str, Any], *, include_status: bool, include_move_out_due
     return result
 
 
-def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]], empty_message: str) -> None:
+def _render_date_task_table(section_title: str, title: str, source: str, rows: list[dict[str, Any]], empty_message: str) -> None:
     remaining = sum(not row["is_completed"] for row in rows)
     st.markdown(f"##### {title} · 미완료 {remaining}건 / 전체 {len(rows)}건")
     if not rows:
@@ -90,7 +90,7 @@ def _render_date_task_table(title: str, source: str, rows: list[dict[str, Any]],
         hide_index=True,
         disabled=[column for column in display_rows[0] if column not in editable_columns],
         column_config=column_config,
-        key=f"today_task_grid_{title}_{source}",
+        key=f"today_task_grid_{section_title}_{source}",
     )
     edited_rows = edited if isinstance(edited, list) else edited.to_dict("records")
     selected_consultation_id: int | None = None
@@ -144,7 +144,7 @@ def _render_date_task_section(title: str, rows: list[dict[str, Any]], empty_mess
     for source, label in (("매물", "매물 업무"), ("계약", "계약 업무"), ("상담", "상담 업무")):
         source_rows = [row for row in rows if row["업무 구분"] == source]
         if source_rows:
-            _render_date_task_table(label, source, source_rows, empty_message)
+            _render_date_task_table(title, label, source, source_rows, empty_message)
 
 
 def render_today_tasks() -> None:

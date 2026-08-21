@@ -6,11 +6,11 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from services.contract_service import BROKERAGE_METHODS, CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, save_contract, validate_contract
+from services.contract_service import BROKERAGE_METHODS, CONTRACT_ACTIVITY_DEFAULT_STATUSES, CONTRACT_ACTIVITY_STAGES, CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, delete_contract_activity, save_contract, save_contract_activity, save_contract_activity_changes, validate_contract, validate_contract_activity
 from services.export_service import create_contract_excel, make_management_export_filename
 from services.contract_schedule_service import expiry_summary, get_contract_schedule
 from services.record_number import contract_number, listing_number
-from storage.contract_repository import get_contracts
+from storage.contract_repository import get_contract_activities, get_contracts
 from storage.listing_repository import search_listing_rounds
 
 
@@ -43,6 +43,93 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
             "메모": item["contract_note"] or "-",
         })
     return rows
+
+
+def _render_contract_activities(selected: dict) -> None:
+    """계약 기본정보와 분리해 가계약부터 입주까지의 실제 처리 이력을 누적한다."""
+    contract_id = selected["contract_id"]
+    st.markdown("##### 계약 단계 이력")
+    st.caption("가계약·정식계약·계약금 수령·잔금·입주 등 실제 처리 단계를 누적합니다. 기존 계약 날짜·금액은 그대로 유지됩니다.")
+    activities = get_contract_activities(contract_id)
+    if activities:
+        st.dataframe(
+            [{"처리일": item["activity_date"], "계약 단계": item["activity_stage"], "단계 후 계약 상태": item["contract_status_after"], "내용": item["activity_note"] or "-"} for item in activities],
+            width="stretch",
+            hide_index=True,
+        )
+        with st.expander("계약 단계 이력 수정·삭제", expanded=False):
+            activity_options = {item["activity_id"]: f"{item['activity_date']} · {item['activity_stage']} · {item['contract_status_after']} · {item['activity_note'] or '내용 미입력'}" for item in activities}
+            selected_activity_id = st.selectbox("수정할 계약 단계 이력 선택", list(activity_options), format_func=activity_options.get, key=f"contract_activity_select_{contract_id}")
+            edit_target_key = f"contract_activity_edit_target_{contract_id}"
+            if st.button("수정 메뉴 열기", key=f"contract_activity_edit_open_{contract_id}"):
+                st.session_state[edit_target_key] = selected_activity_id
+                st.rerun()
+            edit_activity_id = st.session_state.get(edit_target_key)
+            if edit_activity_id in activity_options:
+                activity = next(item for item in activities if item["activity_id"] == edit_activity_id)
+                if st.button("수정 메뉴 닫기", key=f"contract_activity_edit_close_{contract_id}"):
+                    st.session_state.pop(edit_target_key, None)
+                    st.rerun()
+                with st.form(f"contract_activity_edit_{edit_activity_id}"):
+                    left, middle = st.columns(2)
+                    with left:
+                        edit_date = st.date_input("처리일", value=date.fromisoformat(activity["activity_date"]))
+                        edit_stage = st.selectbox("계약 단계", CONTRACT_ACTIVITY_STAGES, index=CONTRACT_ACTIVITY_STAGES.index(activity["activity_stage"]))
+                    with middle:
+                        edit_status = st.selectbox("단계 후 계약 상태", CONTRACT_STATUSES, index=CONTRACT_STATUSES.index(activity["contract_status_after"]))
+                    edit_note = st.text_area("이번 단계 내용", value=activity["activity_note"] or "")
+                    activity_changed = st.form_submit_button("선택한 계약 단계 이력 수정 저장", type="primary")
+                if activity_changed:
+                    values, errors = validate_contract_activity({"activity_date": edit_date, "activity_stage": edit_stage, "contract_status_after": edit_status, "activity_note": edit_note})
+                    if errors:
+                        for error in errors:
+                            st.error(error)
+                    else:
+                        try:
+                            save_contract_activity_changes(edit_activity_id, contract_id, values)
+                        except ValueError as error:
+                            st.error(str(error))
+                        else:
+                            st.success("선택한 계약 단계 이력을 수정했습니다.")
+                            st.rerun()
+                with st.expander("선택한 계약 단계 이력 삭제"):
+                    confirmed = st.checkbox("선택한 계약 단계 이력만 삭제하는 것을 확인했습니다.", key=f"delete_contract_activity_confirm_{edit_activity_id}")
+                    if st.button("선택한 계약 단계 이력 삭제", type="secondary", disabled=not confirmed, key=f"delete_contract_activity_{edit_activity_id}"):
+                        try:
+                            delete_contract_activity(edit_activity_id, contract_id)
+                        except ValueError as error:
+                            st.error(str(error))
+                        else:
+                            st.session_state.pop(edit_target_key, None)
+                            st.success("선택한 계약 단계 이력 1건을 삭제했습니다.")
+                            st.rerun()
+    else:
+        st.caption("아직 계약 단계 이력이 없습니다.")
+
+    with st.form(f"contract_activity_add_{contract_id}"):
+        left, middle = st.columns(2)
+        with left:
+            activity_date = st.date_input("처리일", value=date.today())
+            activity_stage = st.selectbox("계약 단계", CONTRACT_ACTIVITY_STAGES)
+        with middle:
+            default_status = CONTRACT_ACTIVITY_DEFAULT_STATUSES[activity_stage]
+            status_after = st.selectbox("단계 후 계약 상태", CONTRACT_STATUSES, index=CONTRACT_STATUSES.index(default_status))
+            st.caption("단계를 저장하면 선택한 상태가 계약 요약과 연결 매물 상태에 반영됩니다.")
+        activity_note = st.text_area("이번 단계 내용", placeholder="예: 가계약금 수령 후 정식 계약일 협의")
+        activity_submitted = st.form_submit_button("계약 단계 이력 저장", type="primary")
+    if activity_submitted:
+        values, errors = validate_contract_activity({"activity_date": activity_date, "activity_stage": activity_stage, "contract_status_after": status_after, "activity_note": activity_note})
+        if errors:
+            for error in errors:
+                st.error(error)
+        else:
+            try:
+                save_contract_activity(contract_id, values)
+            except ValueError as error:
+                st.error(str(error))
+            else:
+                st.success("기존 계약 정보는 유지하고 계약 단계 이력을 추가했습니다.")
+                st.rerun()
 
 
 def _render_status_change(selected: dict) -> None:
@@ -101,6 +188,8 @@ def _render_status_change(selected: dict) -> None:
         else:
             st.success("계약 기록은 유지한 채 계약 정보를 수정했습니다.")
             st.rerun()
+
+    _render_contract_activities(selected)
 
     with st.expander("이 계약 기록 완전 삭제"):
         st.error("선택한 계약 기록만 삭제됩니다. 매물과 상담 기록은 남습니다.")

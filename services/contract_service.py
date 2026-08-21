@@ -5,13 +5,23 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from storage.contract_repository import create_contract, delete_contract as delete_contract_record, update_contract_details, update_contract_status
+from storage.contract_repository import add_contract_activity, create_contract, delete_contract as delete_contract_record, delete_contract_activity as delete_contract_activity_record, update_contract_activity as update_contract_activity_record, update_contract_details, update_contract_status
 from services.backup_service import create_daily_backup
 
 
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
 BROKERAGE_METHODS = ["단독중개", "공동중개", "확인 필요"]
 CONTRACT_STATUSES = ["계약 예정", "계약 진행", "잔금 예정", "계약 완료", "해지", "만료", "확인 필요"]
+CONTRACT_ACTIVITY_STAGES = ["가계약", "정식계약", "계약금 수령", "잔금", "입주", "해지", "기타"]
+CONTRACT_ACTIVITY_DEFAULT_STATUSES = {
+    "가계약": "계약 진행",
+    "정식계약": "계약 진행",
+    "계약금 수령": "계약 진행",
+    "잔금": "계약 완료",
+    "입주": "계약 완료",
+    "해지": "해지",
+    "기타": "확인 필요",
+}
 
 
 def _date_text(value: Any) -> str | None:
@@ -111,4 +121,39 @@ def change_contract_details(contract_id: int, values: dict[str, Any]) -> None:
 def delete_contract(contract_id: int) -> None:
     """선택한 계약 기록을 완전히 삭제한다."""
     delete_contract_record(contract_id)
+    create_daily_backup()
+
+
+def validate_contract_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    activity_date = _date_text(raw.get("activity_date")) or date.today().isoformat()
+    activity_stage = raw.get("activity_stage") if raw.get("activity_stage") in CONTRACT_ACTIVITY_STAGES else None
+    contract_status_after = raw.get("contract_status_after") if raw.get("contract_status_after") in CONTRACT_STATUSES else None
+    errors: list[str] = []
+    if not activity_stage:
+        errors.append("계약 단계를 선택해 주세요.")
+    if not contract_status_after:
+        errors.append("단계 후 계약 상태를 선택해 주세요.")
+    if errors:
+        return None, errors
+    return {
+        "activity_date": activity_date,
+        "activity_stage": activity_stage,
+        "activity_note": str(raw.get("activity_note") or "").strip() or None,
+        "contract_status_after": contract_status_after,
+    }, []
+
+
+def save_contract_activity(contract_id: int, activity: dict[str, Any]) -> int:
+    result = add_contract_activity(contract_id, activity)
+    create_daily_backup()
+    return result
+
+
+def save_contract_activity_changes(activity_id: int, contract_id: int, activity: dict[str, Any]) -> None:
+    update_contract_activity_record(activity_id, contract_id, activity)
+    create_daily_backup()
+
+
+def delete_contract_activity(activity_id: int, contract_id: int) -> None:
+    delete_contract_activity_record(activity_id, contract_id)
     create_daily_backup()
