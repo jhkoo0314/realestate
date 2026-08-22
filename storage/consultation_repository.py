@@ -14,8 +14,8 @@ def get_consultations(*, query: str = "", categories: list[str] | None = None, s
     ensure_database_schema(path)
     conditions, parameters = ["(c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))"], []
     if keyword := query.strip():
-        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.desired_area LIKE ? OR c.id = ? OR c.listing_id = ?)")
-        parameters.extend([f"%{keyword}%"] * 4 + [record_id_from_query(keyword, "S") or -1, record_id_from_query(keyword, "M") or -1])
+        conditions.append("(b.building_name LIKE ? OR b.lot_address LIKE ? OR u.unit_number LIKE ? OR c.desired_area LIKE ? OR c.customer_name LIKE ? OR c.customer_phone LIKE ? OR c.id = ? OR c.listing_id = ?)")
+        parameters.extend([f"%{keyword}%"] * 6 + [record_id_from_query(keyword, "S") or -1, record_id_from_query(keyword, "M") or -1])
     if categories:
         conditions.append(f"c.consultation_category IN ({', '.join('?' for _ in categories)})")
         parameters.extend(categories)
@@ -52,7 +52,7 @@ def get_consultation_detail(consultation_id: int, path: Path = DATABASE_PATH) ->
     ensure_database_schema(path); connection = get_connection(path)
     try:
         row = connection.execute("""
-            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_source, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.desired_available_from_date, c.next_contact_date, c.consultation_status, c.progress_stage, c.last_contacted_date, c.latest_visit_result, c.closed_reason, c.desired_room_types, c.required_features_note, b.building_name, b.lot_address, u.unit_number, l.received_date
+            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_source, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.desired_available_from_date, c.next_contact_date, c.consultation_status, c.progress_stage, c.last_contacted_date, c.latest_visit_result, c.closed_reason, c.desired_room_types, c.required_features_note, EXISTS(SELECT 1 FROM contracts WHERE source_consultation_id = c.id) AS linked_contract_exists, b.building_name, b.lot_address, u.unit_number, l.received_date
             FROM consultations c LEFT JOIN listings l ON l.id = c.listing_id LEFT JOIN units u ON u.id = l.unit_id LEFT JOIN buildings b ON b.id = u.building_id
             WHERE c.id = ? AND (c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))
         """, (consultation_id,)).fetchone()

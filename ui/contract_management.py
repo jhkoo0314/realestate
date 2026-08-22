@@ -9,8 +9,9 @@ import streamlit as st
 from services.contract_service import BROKERAGE_METHODS, CONTRACT_ACTIVITY_DEFAULT_STATUSES, CONTRACT_ACTIVITY_STAGES, CONTRACT_STATUSES, CONTRACT_TYPES, change_contract_details, delete_contract, delete_contract_activity, save_contract, save_contract_activity, save_contract_activity_changes, validate_contract, validate_contract_activity
 from services.export_service import create_contract_excel, make_management_export_filename
 from services.contract_schedule_service import expiry_summary, get_contract_schedule
-from services.record_number import contract_number, listing_number
+from services.record_number import consultation_number, contract_number, listing_number
 from storage.contract_repository import get_contract_activities, get_contracts
+from storage.consultation_repository import get_consultations
 from storage.listing_repository import search_listing_rounds
 
 
@@ -21,6 +22,47 @@ def _date_text(value: date | None) -> str | None:
 def _listing_label(item: dict) -> str:
     unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
     return f"{listing_number(item['listing_id'])} · {item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
+
+
+def _consultation_label(item: dict) -> str:
+    listing = _listing_label(item) if item.get("listing_id") else "일반 상담 · 연결 매물 없음"
+    return f"{consultation_number(item['consultation_id'])} · {item['customer_name']} · {item['customer_phone']} · 상담일 {item['consulted_date']} · {item['consultation_source'] or '유입 미입력'} · {listing}"
+
+
+def _consultation_for_id(consultation_id: int | None) -> dict | None:
+    if consultation_id is None:
+        return None
+    matches = get_consultations(query=consultation_number(consultation_id))
+    return next((item for item in matches if item["consultation_id"] == consultation_id), None)
+
+
+def _activity_stage_options(current: str | None = None) -> list[str]:
+    """새 입력은 단순하게 보이고 과거에 저장한 단계는 수정 화면에서 보존한다."""
+    return [current, *CONTRACT_ACTIVITY_STAGES] if current and current not in CONTRACT_ACTIVITY_STAGES else CONTRACT_ACTIVITY_STAGES
+
+
+def _render_consultation_picker(key: str, selected_id: int | None = None) -> int | None:
+    """계약 화면에서 상담 목록을 바로 보고 고르게 한다. 검색은 목록 축소용 보조 기능이다."""
+    filter_query = st.text_input("상담 목록 빠른 필터 (선택)", key=f"{key}_filter", placeholder="고객명·연락처·상담번호·매물번호로 목록 좁히기")
+    consultations = get_consultations(query=filter_query) if filter_query.strip() else get_consultations()
+    if not consultations:
+        st.info("조건에 맞는 상담 기록이 없습니다.")
+        return None
+    st.caption(f"상담 목록 {len(consultations)}건 · 목록에서 상담을 고르면 고객 정보가 계약자 정보에 자동 입력됩니다.")
+    st.dataframe(
+        [{
+            "상담번호": consultation_number(item["consultation_id"]), "고객 연락처": item["customer_phone"],
+            "상담일": item["consulted_date"], "유입 경로": item["consultation_source"] or "-",
+            "상담 매물": listing_number(item["listing_id"]), "진행 단계": item["progress_stage"] or "기존 기록",
+            "상담 상태": item["consultation_status"],
+        } for item in consultations],
+        width="stretch", hide_index=True,
+    )
+    options: list[int | None] = [None, *[item["consultation_id"] for item in consultations]]
+    labels = {None: "상담 없이 계약 등록"}
+    labels.update({item["consultation_id"]: f"{consultation_number(item['consultation_id'])} · {item['customer_phone']} · {item['consulted_date']} · {item['consultation_source'] or '유입 미입력'}" for item in consultations})
+    index = options.index(selected_id) if selected_id in options else 0
+    return st.selectbox("연결할 상담 선택", options, index=index, format_func=labels.get, key=key)
 
 
 def _contract_rows(contracts: list[dict]) -> list[dict]:
@@ -46,14 +88,14 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
 
 
 def _render_contract_activities(selected: dict) -> None:
-    """계약 기본정보와 분리해 가계약부터 입주까지의 실제 처리 이력을 누적한다."""
+    """현재 계약 단계를 이력으로 누적하고 계약 상태에 자동 반영한다."""
     contract_id = selected["contract_id"]
     st.markdown("##### 계약 단계 이력")
-    st.caption("가계약·정식계약·계약금 수령·잔금·입주 등 실제 처리 단계를 누적합니다. 기존 계약 날짜·금액은 그대로 유지됩니다.")
+    st.caption("가계약·정식계약·잔금 예정·계약 완료·해지 중 현재 계약 단계를 기록합니다. 선택한 단계는 이력으로 남고 계약 상태에 자동 반영됩니다.")
     activities = get_contract_activities(contract_id)
     if activities:
         st.dataframe(
-            [{"처리일": item["activity_date"], "계약 단계": item["activity_stage"], "단계 후 계약 상태": item["contract_status_after"], "내용": item["activity_note"] or "-"} for item in activities],
+            [{"상태 변경일": item["activity_date"], "현재 계약 단계": item["activity_stage"], "계약 상태": item["contract_status_after"], "내용": item["activity_note"] or "-"} for item in activities],
             width="stretch",
             hide_index=True,
         )
@@ -73,14 +115,16 @@ def _render_contract_activities(selected: dict) -> None:
                 with st.form(f"contract_activity_edit_{edit_activity_id}"):
                     left, middle = st.columns(2)
                     with left:
-                        edit_date = st.date_input("처리일", value=date.fromisoformat(activity["activity_date"]))
-                        edit_stage = st.selectbox("계약 단계", CONTRACT_ACTIVITY_STAGES, index=CONTRACT_ACTIVITY_STAGES.index(activity["activity_stage"]))
+                        edit_date = st.date_input("상태 변경일", value=date.fromisoformat(activity["activity_date"]))
+                        edit_stage_options = _activity_stage_options(activity["activity_stage"])
+                        edit_stage = st.selectbox("현재 계약 단계", edit_stage_options, index=edit_stage_options.index(activity["activity_stage"]))
                     with middle:
-                        edit_status = st.selectbox("단계 후 계약 상태", CONTRACT_STATUSES, index=CONTRACT_STATUSES.index(activity["contract_status_after"]))
+                        edit_status = CONTRACT_ACTIVITY_DEFAULT_STATUSES[edit_stage]
+                        st.caption(f"자동 반영될 계약 상태: {edit_status}")
                     edit_note = st.text_area("이번 단계 내용", value=activity["activity_note"] or "")
                     activity_changed = st.form_submit_button("선택한 계약 단계 이력 수정 저장", type="primary")
                 if activity_changed:
-                    values, errors = validate_contract_activity({"activity_date": edit_date, "activity_stage": edit_stage, "contract_status_after": edit_status, "activity_note": edit_note})
+                    values, errors = validate_contract_activity({"activity_date": edit_date, "activity_stage": edit_stage, "activity_note": edit_note})
                     if errors:
                         for error in errors:
                             st.error(error)
@@ -109,16 +153,15 @@ def _render_contract_activities(selected: dict) -> None:
     with st.form(f"contract_activity_add_{contract_id}"):
         left, middle = st.columns(2)
         with left:
-            activity_date = st.date_input("처리일", value=date.today())
-            activity_stage = st.selectbox("계약 단계", CONTRACT_ACTIVITY_STAGES)
+            activity_date = st.date_input("상태 변경일", value=date.today(), help="이 단계가 실제로 확정·처리된 날입니다. 정식 계약일·잔금 예정일 같은 미래 일정은 위 계약 정보에 기록하세요.")
+            activity_stage = st.selectbox("현재 계약 단계", CONTRACT_ACTIVITY_STAGES)
         with middle:
             default_status = CONTRACT_ACTIVITY_DEFAULT_STATUSES[activity_stage]
-            status_after = st.selectbox("단계 후 계약 상태", CONTRACT_STATUSES, index=CONTRACT_STATUSES.index(default_status))
-            st.caption("단계를 저장하면 선택한 상태가 계약 요약과 연결 매물 상태에 반영됩니다.")
+            st.caption(f"자동 반영될 계약 상태: {default_status}")
         activity_note = st.text_area("이번 단계 내용", placeholder="예: 가계약금 수령 후 정식 계약일 협의")
         activity_submitted = st.form_submit_button("계약 단계 이력 저장", type="primary")
     if activity_submitted:
-        values, errors = validate_contract_activity({"activity_date": activity_date, "activity_stage": activity_stage, "contract_status_after": status_after, "activity_note": activity_note})
+        values, errors = validate_contract_activity({"activity_date": activity_date, "activity_stage": activity_stage, "activity_note": activity_note})
         if errors:
             for error in errors:
                 st.error(error)
@@ -137,6 +180,7 @@ def _render_status_change(selected: dict) -> None:
     st.caption(f"수정 대상: {contract_number(selected['contract_id'])} · {_listing_label(selected)}")
     if st.button("수정 닫기", key=f"contract_edit_close_{selected['contract_id']}"):
         st.session_state.pop("contract_edit_target_id", None)
+        st.session_state.pop(f"contract_edit_source_{selected['contract_id']}", None)
         st.rerun()
     index = CONTRACT_STATUSES.index(selected["contract_status"]) if selected["contract_status"] in CONTRACT_STATUSES else 0
     left, middle, right = st.columns(3)
@@ -152,9 +196,21 @@ def _render_status_change(selected: dict) -> None:
     with right:
         start_date = st.date_input("임대차 시작일", value=date.fromisoformat(selected["contract_start_date"]) if selected["contract_start_date"] else None, key=f"contract_start_{selected['contract_id']}")
         end_date = st.date_input("임대차 종료일", value=date.fromisoformat(selected["contract_end_date"]) if selected["contract_end_date"] else None, key=f"contract_end_{selected['contract_id']}")
+    source_key = f"contract_edit_source_{selected['contract_id']}"
+    if source_key not in st.session_state:
+        st.session_state[source_key] = selected.get("source_consultation_id")
+    selected_source_id = _render_consultation_picker(source_key, st.session_state[source_key])
+    source_consultation = _consultation_for_id(selected_source_id)
+    st.markdown("##### 연결 상담")
+    if source_consultation:
+        st.info(f"연결 상담: {_consultation_label(source_consultation)}")
+    else:
+        st.caption("상담 연결을 하지 않으려면 목록에서 `상담 없이 계약 등록`을 선택하세요.")
+
     detail_left, detail_middle, _ = st.columns(3)
     with detail_left:
-        contact = st.text_input("계약자 연락처 (내부정보)", value=selected["contractor_contact"] or "", key=f"contract_contact_{selected['contract_id']}")
+        contractor_name = st.text_input("계약자 이름 (내부정보)", value=selected.get("contractor_name") or (source_consultation["customer_name"] if source_consultation else ""), key=f"contract_name_{selected['contract_id']}")
+        contact = st.text_input("계약자 연락처 (내부정보)", value=selected["contractor_contact"] or (source_consultation["customer_phone"] if source_consultation else ""), key=f"contract_contact_{selected['contract_id']}")
     with detail_middle:
         term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=selected["term_months"], key=f"contract_term_{selected['contract_id']}")
     payment_left, payment_middle, payment_right = st.columns(3)
@@ -172,13 +228,15 @@ def _render_status_change(selected: dict) -> None:
     with balance_middle:
         balance_due = st.date_input("잔금 예정일", value=date.fromisoformat(selected["balance_due_date"]) if selected["balance_due_date"] else None, key=f"contract_balance_due_{selected['contract_id']}")
     note = st.text_area("계약 메모", value=selected["contract_note"] or "", key=f"contract_note_{selected['contract_id']}")
+    sync_source = st.checkbox("현재 계약 상태를 연결 상담에 반영", value=False, key=f"contract_source_sync_{selected['contract_id']}", help="기존 계약에 상담을 새로 연결한 경우에만 필요할 때 선택하세요.")
     if st.button("계약 정보 저장", key=f"contract_status_save_{selected['contract_id']}"):
         try:
             change_contract_details(selected["contract_id"], {
                 "contract_type": contract_type, "brokerage_method": brokerage_method, "contract_status": status,
                 "contract_progress_date": progress_date, "formal_contract_date": formal_date,
                 "contract_start_date": start_date, "contract_end_date": end_date, "term_months": term_months,
-                "contract_note": note, "contractor_contact": contact,
+                "contract_note": note, "contractor_name": contractor_name, "contractor_contact": contact,
+                "source_consultation_id": st.session_state[source_key], "sync_source_consultation": sync_source,
                 "contract_deposit_manwon": deposit, "provisional_deposit_manwon": provisional_deposit,
                 "remaining_deposit_due_date": remaining_deposit_due, "balance_manwon": balance,
                 "balance_due_date": balance_due,
@@ -296,7 +354,7 @@ def _render_contract_schedule() -> None:
 
 def _render_contract_registration() -> None:
     st.markdown("#### 계약 등록")
-    st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 가계약 진행·정식 계약·임대차 기간을 한 계약 기록에 이어서 관리합니다.")
+    st.caption("계약할 당시의 매물 기록을 먼저 선택한 뒤, 정식 계약일·잔금 예정일·임대차 기간처럼 앞으로의 일정을 먼저 기록합니다. 실제 상태 변경은 저장 뒤 계약 단계 이력에서 남깁니다.")
     listing_query = st.text_input("연결할 매물 회차 찾기", key="contract_listing_query", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
     selected = st.session_state.get("contract_selected_listing")
     if selected is None:
@@ -317,7 +375,18 @@ def _render_contract_registration() -> None:
         if st.button("다른 매물 기록 선택", key="clear_contract_listing"):
             st.session_state.pop("contract_selected_listing", None)
             st.rerun()
-        with st.form(f"contract_create_{selected['listing_id']}"):
+        pending_source_id = st.session_state.pop("contract_selected_consultation_id", None)
+        source_key = "contract_selected_consultation_id_for_create"
+        if pending_source_id is not None:
+            st.session_state[source_key] = pending_source_id
+        st.markdown("##### 계약으로 이어진 상담 (선택)")
+        source_id = _render_consultation_picker(source_key, st.session_state.get(source_key))
+        source = _consultation_for_id(source_id)
+        if source:
+            st.info(f"선택한 상담: {_consultation_label(source)}")
+        else:
+            st.caption("상담 없이 바로 계약한 경우에는 상담을 선택하지 않고 계속 입력하세요.")
+        with st.form(f"contract_create_{selected['listing_id']}_{source['consultation_id'] if source else 'none'}"):
             left, middle, right = st.columns(3)
             with left:
                 contract_type = st.selectbox("계약 유형 *", CONTRACT_TYPES)
@@ -332,7 +401,8 @@ def _render_contract_registration() -> None:
             contract_note = st.text_area("계약 메모", placeholder="예: 단기 연장 여부 확인 필요")
             detail_left, detail_middle, _ = st.columns(3)
             with detail_left:
-                contractor_contact = st.text_input("계약자 연락처 (내부정보)", placeholder="예: 010-1234-5678")
+                contractor_name = st.text_input("계약자 이름 (내부정보)", value=source["customer_name"] if source else "")
+                contractor_contact = st.text_input("계약자 연락처 (내부정보)", value=source["customer_phone"] if source else "", placeholder="예: 010-1234-5678")
             with detail_middle:
                 term_months = st.number_input("임대차 기간 (개월)", min_value=1, step=1, value=None)
             payment_left, payment_middle, payment_right = st.columns(3)
@@ -356,6 +426,8 @@ def _render_contract_registration() -> None:
                 "formal_contract_date": formal_contract,
                 "contract_start_date": contract_start, "contract_end_date": contract_end,
                 "term_months": term_months, "contract_note": contract_note,
+                "source_consultation_id": source["consultation_id"] if source else None,
+                "contractor_name": contractor_name,
                 "contractor_contact": contractor_contact, "contract_deposit_manwon": contract_deposit,
                 "provisional_deposit_manwon": provisional_deposit, "remaining_deposit_due_date": remaining_deposit_due,
                 "balance_manwon": balance,
@@ -372,12 +444,13 @@ def _render_contract_registration() -> None:
                 else:
                     st.success(f"새 계약 기록을 추가했습니다. 계약번호는 {contract_number(contract_id)}, 연결 매물번호는 {listing_number(selected['listing_id'])}입니다. 기존 계약과 매물 기록은 변경되지 않았습니다.")
                     st.session_state.pop("contract_selected_listing", None)
+                    st.session_state.pop(source_key, None)
                     st.rerun()
 
 
 def render_contract_management() -> None:
     st.subheader("계약관리")
-    st.markdown("<p class='section-note'>계약은 건물·호실이 아니라 계약 당시의 매물 기록에 연결합니다. 계약자 연락처와 계약금·잔금은 내부정보로 관리하며, 결제·계약서 파일은 관리하지 않습니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='section-note'>계약은 실제 계약한 매물 기록에 연결하고, 계약으로 이어진 상담은 별도로 연결합니다. 계약자 정보와 계약금·잔금은 내부정보로 관리하며, 결제·계약서 파일은 관리하지 않습니다.</p>", unsafe_allow_html=True)
     mode = st.radio(
         "계약관리 메뉴",
         ["계약 등록", "계약 조회·수정", "계약 일정"],

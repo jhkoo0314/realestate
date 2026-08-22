@@ -25,6 +25,11 @@ def _date_text(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _stage_options(current: str | None = None) -> list[str]:
+    """새 입력에서는 계약 단계를 숨기되 과거 기록은 수정 화면에서 보존한다."""
+    return [current, *PROGRESS_STAGES] if current and current not in PROGRESS_STAGES else PROGRESS_STAGES
+
+
 def _task_text(item: dict, today: str) -> str:
     """상담 상태와 연락 기한에서 바로 처리할 일을 만든다."""
     tasks: list[str] = []
@@ -64,8 +69,8 @@ def _render_registration() -> None:
             with right:
                 progress_stage = st.selectbox("진행 단계", PROGRESS_STAGES)
                 closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if progress_stage == "종료" else "선택 안 함"
-                consultation_status = "종료" if progress_stage in ("계약 완료", "종료") else "진행 중"
-                next_contact = st.date_input("다음 연락일", value=None, disabled=progress_stage in ("계약 완료", "종료"))
+                consultation_status = "종료" if progress_stage == "종료" else "진행 중"
+                next_contact = st.date_input("다음 연락일", value=None, disabled=progress_stage == "종료")
                 consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES)
             st.markdown("##### 희망 조건 (선택)")
             desired_left, desired_middle, desired_right, desired_last, desired_date_column = st.columns(5)
@@ -130,8 +135,8 @@ def _render_registration() -> None:
         with right:
             progress_stage = st.selectbox("진행 단계", PROGRESS_STAGES)
             closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if progress_stage == "종료" else "선택 안 함"
-            consultation_status = "종료" if progress_stage in ("계약 완료", "종료") else "진행 중"
-            next_contact = st.date_input("다음 연락일", value=None, disabled=progress_stage in ("계약 완료", "종료"))
+            consultation_status = "종료" if progress_stage == "종료" else "진행 중"
+            next_contact = st.date_input("다음 연락일", value=None, disabled=progress_stage == "종료")
             consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES)
         st.markdown("##### 희망 조건 (선택)")
         desired_left, desired_middle, desired_right, desired_last, desired_date_column = st.columns(5)
@@ -257,6 +262,11 @@ def _render_lookup() -> None:
     if st.button("상세·수정 닫기", key=f"consultation_edit_close_{detail['consultation_id']}"):
         st.session_state.pop("consultation_edit_target_id", None)
         st.rerun()
+    if st.button("이 상담으로 계약 등록", key=f"consultation_to_contract_{detail['consultation_id']}", type="primary"):
+        st.session_state["selected_page"] = "계약관리"
+        st.session_state["contract_management_mode"] = "계약 등록"
+        st.session_state["contract_selected_consultation_id"] = detail["consultation_id"]
+        st.rerun()
     phone_key = f"show_consultation_phone_{detail['consultation_id']}"
     if st.button("연락처 보기", key=f"consultation_phone_button_{detail['consultation_id']}"):
         st.session_state[phone_key] = True
@@ -300,7 +310,9 @@ def _render_lookup() -> None:
             st.success("상담 기록은 유지한 채 정보를 수정했습니다.")
             st.rerun()
 
-    if detail["progress_stage"]:
+    if detail.get("linked_contract_exists"):
+        st.info("이 상담은 계약에 연결되어 있습니다. 계약 진행·완료와 단계 이력은 계약관리에서 처리합니다.")
+    elif detail["progress_stage"]:
         st.markdown("##### 후속 상담 이력")
         activities = get_consultation_activities(detail["consultation_id"])
         if activities:
@@ -326,14 +338,15 @@ def _render_lookup() -> None:
                             edit_activity_date = st.date_input("후속 상담일", value=date.fromisoformat(selected_activity["activity_date"]), key=f"activity_date_{edit_activity_id}")
                             edit_activity_type = st.selectbox("상담 방식", CONSULTATION_TYPES, index=CONSULTATION_TYPES.index(selected_activity["activity_type"]), key=f"activity_type_{edit_activity_id}")
                         with edit_middle:
-                            edit_stage = st.selectbox("결과 단계", PROGRESS_STAGES, index=PROGRESS_STAGES.index(selected_activity["stage_after_activity"]), key=f"activity_stage_{edit_activity_id}")
+                            edit_stage_options = _stage_options(selected_activity["stage_after_activity"])
+                            edit_stage = st.selectbox("결과 단계", edit_stage_options, index=edit_stage_options.index(selected_activity["stage_after_activity"]), key=f"activity_stage_{edit_activity_id}")
                             visit_index = (["미입력", *VISIT_RESULTS].index(selected_activity["visit_result"]) if selected_activity["visit_result"] in VISIT_RESULTS else 0)
                             edit_visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS], index=visit_index, key=f"activity_visit_result_{edit_activity_id}")
                             st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
                         with edit_right:
                             closed_index = (["선택 안 함", *CLOSED_REASONS].index(selected_activity["closed_reason"]) if selected_activity["closed_reason"] in CLOSED_REASONS else 0)
                             edit_closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], index=closed_index, key=f"activity_closed_reason_{edit_activity_id}", help="결과 단계를 `종료`로 저장할 때는 반드시 선택해 주세요.")
-                            edit_next_contact = st.date_input("다음 연락일", value=date.fromisoformat(selected_activity["next_contact_date"]) if selected_activity["next_contact_date"] else None, disabled=edit_stage in ("계약 완료", "종료"), key=f"activity_next_contact_{edit_activity_id}")
+                            edit_next_contact = st.date_input("다음 연락일", value=date.fromisoformat(selected_activity["next_contact_date"]) if selected_activity["next_contact_date"] else None, disabled=edit_stage == "종료", key=f"activity_next_contact_{edit_activity_id}")
                         edit_activity_note = st.text_area("이번 상담 내용", value=selected_activity["activity_note"] or "", key=f"activity_note_{edit_activity_id}")
                         activity_change_submitted = st.form_submit_button("선택한 후속 상담 이력 수정 저장", type="primary")
                     if activity_change_submitted:
@@ -368,13 +381,13 @@ def _render_lookup() -> None:
                 activity_date = st.date_input("후속 상담일", value=date.today())
                 activity_type = st.selectbox("상담 방식", CONSULTATION_TYPES)
             with activity_middle:
-                stage_index = PROGRESS_STAGES.index(detail["progress_stage"])
-                stage_after_activity = st.selectbox("결과 단계", PROGRESS_STAGES, index=stage_index)
+                stage_options = _stage_options(detail["progress_stage"])
+                stage_after_activity = st.selectbox("결과 단계", stage_options, index=stage_options.index(detail["progress_stage"]))
                 visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS])
                 st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
             with activity_right:
                 closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS], help="결과 단계를 `종료`로 저장할 때는 반드시 선택해 주세요.")
-                next_activity_contact = st.date_input("다음 연락일", value=None, disabled=stage_after_activity in ("계약 완료", "종료"))
+                next_activity_contact = st.date_input("다음 연락일", value=None, disabled=stage_after_activity == "종료")
             activity_note = st.text_area("이번 상담 내용", placeholder="예: 방문 후 가격을 검토하기로 함")
             activity_submitted = st.form_submit_button("후속 상담 기록 저장", type="primary")
         if activity_submitted:
@@ -438,7 +451,7 @@ def _render_lookup() -> None:
 
 def render_consultation_management() -> None:
     st.subheader("상담관리")
-    st.markdown("<p class='section-note'>매물별 상담 이력과 다음 연락일을 관리합니다. 고객 연락처는 상담 상세에서만 확인합니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='section-note'>상담 단계는 계약 전까지 관리합니다. 계약 진행·완료와 계약 단계 이력은 계약관리에서 처리하며, 고객 연락처는 상담 상세에서만 확인합니다.</p>", unsafe_allow_html=True)
     mode = st.radio("상담관리 메뉴", ["상담 등록", "상담 조회·수정"], horizontal=True, key="consultation_management_mode")
     if mode == "상담 등록":
         _render_registration()

@@ -12,14 +12,18 @@ from services.backup_service import create_daily_backup
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
 BROKERAGE_METHODS = ["단독중개", "공동중개", "확인 필요"]
 CONTRACT_STATUSES = ["계약 예정", "계약 진행", "잔금 예정", "계약 완료", "해지", "만료", "확인 필요"]
-CONTRACT_ACTIVITY_STAGES = ["가계약", "정식계약", "계약금 수령", "잔금", "입주", "해지", "기타"]
+CONTRACT_ACTIVITY_STAGES = ["가계약", "정식계약", "잔금 예정", "계약 완료", "해지"]
+LEGACY_CONTRACT_ACTIVITY_STAGES = ["계약금 수령", "잔금", "입주", "기타"]
 CONTRACT_ACTIVITY_DEFAULT_STATUSES = {
     "가계약": "계약 진행",
     "정식계약": "계약 진행",
+    "잔금 예정": "잔금 예정",
+    "계약 완료": "계약 완료",
+    "해지": "해지",
+    # 과거 저장 이력은 표시·수정 시 의미를 보존한다. 새 입력 메뉴에는 보이지 않는다.
     "계약금 수령": "계약 진행",
     "잔금": "계약 완료",
     "입주": "계약 완료",
-    "해지": "해지",
     "기타": "확인 필요",
 }
 
@@ -46,6 +50,12 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
     remaining_deposit_due_date = _date_text(raw.get("remaining_deposit_due_date"))
     balance = raw.get("balance_manwon")
     balance_due_date = _date_text(raw.get("balance_due_date"))
+    source_consultation_id = raw.get("source_consultation_id")
+    if source_consultation_id is not None:
+        try:
+            source_consultation_id = int(source_consultation_id)
+        except (TypeError, ValueError):
+            errors.append("연결 상담을 다시 선택해 주세요.")
     if contract_type not in CONTRACT_TYPES:
         errors.append("계약 유형을 선택해 주세요.")
     if brokerage_method not in BROKERAGE_METHODS:
@@ -87,12 +97,17 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
         "term_months": int(term) if term is not None else None,
         "contract_status": contract_status,
         "contract_note": note,
+        "source_consultation_id": source_consultation_id,
+        "contractor_name": str(raw.get("contractor_name") or "").strip() or None,
         "contractor_contact": str(raw.get("contractor_contact") or "").strip() or None,
         "contract_deposit_manwon": int(deposit) if deposit is not None else None,
         "provisional_deposit_manwon": int(provisional_deposit) if provisional_deposit is not None else None,
         "remaining_deposit_due_date": remaining_deposit_due_date,
         "balance_manwon": int(balance) if balance is not None else None,
         "balance_due_date": balance_due_date,
+        # 기존 계약에 상담을 나중에 연결할 때 사용하는 명시적 동기화 요청도
+        # 입력 검사 뒤 저장소까지 유지해야 한다.
+        "sync_source_consultation": bool(raw.get("sync_source_consultation")),
     }, []
 
 
@@ -126,13 +141,11 @@ def delete_contract(contract_id: int) -> None:
 
 def validate_contract_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     activity_date = _date_text(raw.get("activity_date")) or date.today().isoformat()
-    activity_stage = raw.get("activity_stage") if raw.get("activity_stage") in CONTRACT_ACTIVITY_STAGES else None
-    contract_status_after = raw.get("contract_status_after") if raw.get("contract_status_after") in CONTRACT_STATUSES else None
+    activity_stage = raw.get("activity_stage") if raw.get("activity_stage") in [*CONTRACT_ACTIVITY_STAGES, *LEGACY_CONTRACT_ACTIVITY_STAGES] else None
+    contract_status_after = CONTRACT_ACTIVITY_DEFAULT_STATUSES.get(activity_stage)
     errors: list[str] = []
     if not activity_stage:
         errors.append("계약 단계를 선택해 주세요.")
-    if not contract_status_after:
-        errors.append("단계 후 계약 상태를 선택해 주세요.")
     if errors:
         return None, errors
     return {
