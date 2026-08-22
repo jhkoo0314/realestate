@@ -36,6 +36,24 @@ def _consultation_for_id(consultation_id: int | None) -> dict | None:
     return next((item for item in matches if item["consultation_id"] == consultation_id), None)
 
 
+def _render_source_consultation_summary(source: dict) -> None:
+    """계약 전에 원본 상담의 업무 판단 정보를 다시 찾지 않도록 짧게 보여 준다."""
+    st.markdown("###### 연결 상담 요약")
+    st.dataframe([{
+        "상담번호": consultation_number(source["consultation_id"]),
+        "고객 연락처": source["customer_phone"] or "-",
+        "유입 경로": source["consultation_source"] or "-",
+        "희망 지역": source["desired_area"] or "-",
+        "희망 방 유형": source["desired_room_types"] or source["desired_room_type"] or "-",
+        "예산(보증금/월세)": f"{source['desired_deposit_manwon'] if source['desired_deposit_manwon'] is not None else '-'} / {source['desired_monthly_rent_manwon'] if source['desired_monthly_rent_manwon'] is not None else '-'}",
+        "입주 가능일": source["desired_available_from_date"] or "-",
+        "최근 방문 결과": source["latest_visit_result"] or "-",
+        "최근 상담일": source["last_contacted_date"] or source["consulted_date"],
+    }], width="stretch", hide_index=True)
+    if source.get("consultation_note"):
+        st.caption(f"상담 메모: {source['consultation_note']}")
+
+
 def _activity_stage_options(current: str | None = None) -> list[str]:
     """새 입력은 단순하게 보이고 과거에 저장한 단계는 수정 화면에서 보존한다."""
     return [current, *CONTRACT_ACTIVITY_STAGES] if current and current not in CONTRACT_ACTIVITY_STAGES else CONTRACT_ACTIVITY_STAGES
@@ -384,6 +402,7 @@ def _render_contract_registration() -> None:
         source = _consultation_for_id(source_id)
         if source:
             st.info(f"선택한 상담: {_consultation_label(source)}")
+            _render_source_consultation_summary(source)
         else:
             st.caption("상담 없이 바로 계약한 경우에는 상담을 선택하지 않고 계속 입력하세요.")
         with st.form(f"contract_create_{selected['listing_id']}_{source['consultation_id'] if source else 'none'}"):

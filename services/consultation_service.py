@@ -13,6 +13,8 @@ CONSULTATION_TYPES = ["전화", "문자", "방문", "기타"]
 CONSULTATION_STATUSES = ["진행 중", "보류", "종료", "확인 필요"]
 CONSULTATION_CATEGORIES = ["매물 상담", "일반 상담"]
 CONSULTATION_SOURCES = ["미입력", "직방", "다방", "당근", "네이버", "워크인", "타부동산 연계"]
+DESIRED_AREA_OPTIONS = ["북수리", "장재리", "공수리", "월천지구", "탕정역권", "기타 배방", "탕정", "기타"]
+DESIRED_ROOM_TYPE_OPTIONS = ["원룸", "투베이", "투룸", "쓰리룸", "주인세대", "기타"]
 # 계약 진행·완료는 계약관리에서만 자동 반영한다. 과거 저장값은 화면에서 계속 표시한다.
 PROGRESS_STAGES = ["신규 문의", "조건 확인", "방문 예정", "방문 완료", "검토 중", "종료"]
 LEGACY_PROGRESS_STAGES = ["계약 진행", "계약 완료"]
@@ -43,8 +45,6 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
     consultation_source = raw.get("consultation_source") if raw.get("consultation_source") in CONSULTATION_SOURCES else "미입력"
     progress_stage = raw.get("progress_stage") if raw.get("progress_stage") in [*PROGRESS_STAGES, *LEGACY_PROGRESS_STAGES] else "신규 문의"
     closed_reason = raw.get("closed_reason") if raw.get("closed_reason") in CLOSED_REASONS else None
-    if progress_stage == "종료" and not closed_reason:
-        errors.append("진행 단계를 종료로 선택하면 종료 사유도 선택해 주세요.")
     if progress_stage == "종료":
         consultation_status = "종료"
         next_contact = None
@@ -121,7 +121,6 @@ def validate_consultation_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] 
     next_contact_date = _date_text(raw.get("next_contact_date"))
     if not activity_type: errors.append("상담 방식을 선택해 주세요.")
     if not stage: errors.append("결과 단계를 선택해 주세요.")
-    if stage == "종료" and not closed_reason: errors.append("종료 사유를 선택해 주세요.")
     if stage == "종료":
         next_contact_date = None
     if errors:
@@ -145,8 +144,8 @@ def delete_consultation_activity(activity_id: int, consultation_id: int) -> None
     create_daily_backup()
 
 
-def close_legacy_consultation(consultation_id: int, closed_reason: str) -> None:
-    if closed_reason not in CLOSED_REASONS:
-        raise ValueError("종료 사유를 선택해 주세요.")
+def close_legacy_consultation(consultation_id: int, closed_reason: str | None) -> None:
+    if closed_reason is not None and closed_reason not in CLOSED_REASONS:
+        raise ValueError("종료 사유 값을 확인해 주세요.")
     close_legacy_consultation_record(consultation_id, closed_reason)
     create_daily_backup()

@@ -41,7 +41,6 @@ INPUT_KEYS = [
     "listing_holder_choice", "listing_holder_custom", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
-UNIT_OPTION_LABELS = ["냉장고", "세탁기", "전자레인지", "에어컨", "TV", "가스렌지", "인덕션", "옷장", "신발장"]
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 REGISTRATION_ROOM_TYPES = ROOM_TYPES
 
@@ -49,9 +48,6 @@ REGISTRATION_ROOM_TYPES = ROOM_TYPES
 def _clear_registration_inputs() -> None:
     for key in INPUT_KEYS:
         st.session_state.pop(f"registration_{key}", None)
-    for index in range(len(UNIT_OPTION_LABELS)):
-        st.session_state.pop(f"registration_unit_option_{index}", None)
-    st.session_state.pop("registration_unit_options_other", None)
     st.session_state.pop("registration_auto_floor_number", None)
     st.session_state.pop("pending_registration", None)
 
@@ -67,44 +63,6 @@ def _clear_current_listing_inputs() -> None:
     for key in list(st.session_state):
         if key.startswith(("edit_", "close_")):
             st.session_state.pop(key, None)
-
-
-def _split_unit_options(value: str | None) -> tuple[set[str], str]:
-    selected: set[str] = set()
-    other_items: list[str] = []
-    for item in (value or "").split(","):
-        item = item.strip()
-        if not item:
-            continue
-        if item in UNIT_OPTION_LABELS:
-            selected.add(item)
-        elif item.startswith("기타:"):
-            other_items.append(item.removeprefix("기타:").strip())
-        else:
-            other_items.append(item)
-    return selected, ", ".join(item for item in other_items if item)
-
-
-def _render_unit_option_checkboxes(key_prefix: str, saved_options: str | None = None) -> str | None:
-    selected_before, other_before = _split_unit_options(saved_options)
-    for index, label in enumerate(UNIT_OPTION_LABELS):
-        key = f"{key_prefix}_option_{index}"
-        if key not in st.session_state:
-            st.session_state[key] = label in selected_before
-    other_key = f"{key_prefix}_options_other"
-    if other_key not in st.session_state:
-        st.session_state[other_key] = other_before
-
-    option_columns = st.columns(4)
-    selected_options = []
-    for index, label in enumerate(UNIT_OPTION_LABELS):
-        with option_columns[index % len(option_columns)]:
-            if st.checkbox(label, key=f"{key_prefix}_option_{index}"):
-                selected_options.append(label)
-    other_option = st.text_input("기타 옵션 메모", key=other_key, placeholder="예: 침대, 식탁")
-    if other_option.strip():
-        selected_options.append(f"기타: {other_option.strip()}")
-    return ", ".join(selected_options) or None
 
 
 def _status_index(options: list[str], value: str | None) -> int:
@@ -421,8 +379,6 @@ def _render_current_listing_edit(unit_id: int) -> None:
     _render_listing_holder_fields("edit", listing.get("listing_holder"))
     _render_management_fields("edit", listing)
     st.text_area("이번 매물 메모", value=listing["listing_note"] or "", key="edit_listing_note")
-    st.markdown("##### 호실 옵션")
-    unit_options = _render_unit_option_checkboxes("edit_unit", context.get("unit_options"))
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
         with contact_left:
@@ -450,7 +406,6 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "listing_note": st.session_state.get("edit_listing_note"),
             "landlord_contact": st.session_state.get("edit_landlord_contact"),
             "tenant_contact": st.session_state.get("edit_tenant_contact"),
-            "unit_options": unit_options,
         }
         updated, errors = validate_current_listing(raw)
         if errors:

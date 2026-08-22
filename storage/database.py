@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS contracts (id INTEGER PRIMARY KEY AUTOINCREMENT, list
 CREATE TABLE IF NOT EXISTS contract_activities (id INTEGER PRIMARY KEY AUTOINCREMENT, contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE, activity_date TEXT NOT NULL, activity_stage TEXT NOT NULL, activity_note TEXT, contract_status_after TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS consultations (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER REFERENCES listings(id), consultation_category TEXT NOT NULL DEFAULT '매물 상담', customer_name TEXT NOT NULL, customer_phone TEXT NOT NULL, consulted_date TEXT NOT NULL, consultation_type TEXT NOT NULL, consultation_source TEXT, consultation_note TEXT NOT NULL, desired_area TEXT, desired_room_type TEXT, desired_deposit_manwon INTEGER, desired_monthly_rent_manwon INTEGER, desired_available_from_date TEXT, next_contact_date TEXT, consultation_status TEXT NOT NULL, progress_stage TEXT, last_contacted_date TEXT, latest_visit_result TEXT, closed_reason TEXT, desired_room_types TEXT, required_features_note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS consultation_activities (id INTEGER PRIMARY KEY AUTOINCREMENT, consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE, activity_date TEXT NOT NULL, activity_type TEXT NOT NULL, activity_note TEXT, stage_after_activity TEXT NOT NULL, visit_result TEXT, closed_reason TEXT, next_contact_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS listing_advertisements (id INTEGER PRIMARY KEY AUTOINCREMENT, listing_id INTEGER NOT NULL REFERENCES listings(id), advertising_channel TEXT NOT NULL COLLATE NOCASE, advertising_status TEXT NOT NULL, last_checked_date TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(listing_id, advertising_channel));
+CREATE TABLE IF NOT EXISTS monthly_advertising_costs (id INTEGER PRIMARY KEY AUTOINCREMENT, year_month TEXT NOT NULL, advertising_channel TEXT NOT NULL COLLATE NOCASE, monthly_cost_manwon INTEGER NOT NULL, memo TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(year_month, advertising_channel));
 CREATE TABLE IF NOT EXISTS today_task_completions (task_key TEXT PRIMARY KEY, completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TRIGGER IF NOT EXISTS buildings_set_updated_at AFTER UPDATE ON buildings FOR EACH ROW BEGIN UPDATE buildings SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS units_set_updated_at AFTER UPDATE ON units FOR EACH ROW BEGIN UPDATE units SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
@@ -29,7 +29,7 @@ CREATE TRIGGER IF NOT EXISTS contracts_set_updated_at AFTER UPDATE ON contracts 
 CREATE TRIGGER IF NOT EXISTS contract_activities_set_updated_at AFTER UPDATE ON contract_activities FOR EACH ROW BEGIN UPDATE contract_activities SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS consultations_set_updated_at AFTER UPDATE ON consultations FOR EACH ROW BEGIN UPDATE consultations SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS consultation_activities_set_updated_at AFTER UPDATE ON consultation_activities FOR EACH ROW BEGIN UPDATE consultation_activities SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
-CREATE TRIGGER IF NOT EXISTS listing_advertisements_set_updated_at AFTER UPDATE ON listing_advertisements FOR EACH ROW BEGIN UPDATE listing_advertisements SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
+CREATE TRIGGER IF NOT EXISTS monthly_advertising_costs_set_updated_at AFTER UPDATE ON monthly_advertising_costs FOR EACH ROW BEGIN UPDATE monthly_advertising_costs SET updated_at=CURRENT_TIMESTAMP WHERE id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS today_task_completions_set_updated_at AFTER UPDATE ON today_task_completions FOR EACH ROW BEGIN UPDATE today_task_completions SET updated_at=CURRENT_TIMESTAMP WHERE task_key=OLD.task_key; END;
 """
 
@@ -55,6 +55,7 @@ def initialize_database(path: Path = DATABASE_PATH) -> None:
             _backup_before_consultation_progress_migration(connection)
             _backup_before_contract_activity_migration(connection)
             _backup_before_contract_consultation_link_migration(connection)
+            _replace_listing_advertisements(connection)
             connection.executescript(SCHEMA)
             _ensure_compatibility_columns(connection)
     finally:
@@ -97,6 +98,26 @@ def _ensure_compatibility_columns(connection: sqlite3.Connection) -> None:
     # 공동중개가 계약 유형으로 잠시 저장된 기록은 의미를 보존해 별도 중개 방식으로 옮긴다.
     connection.execute("UPDATE contracts SET contract_type = '확인 필요', brokerage_method = '공동중개' WHERE contract_type = '공동중개' AND (brokerage_method IS NULL OR TRIM(brokerage_method) = '')")
     connection.executescript(SCHEMA)
+
+
+def _replace_listing_advertisements(connection: sqlite3.Connection) -> None:
+    """승인된 광고관리 전환: 보호 사본을 확인한 뒤 매물별 광고 표를 제거한다."""
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='listing_advertisements'").fetchone():
+        return
+    source_name = next((row[2] for row in connection.execute("PRAGMA database_list") if row[1] == "main"), "")
+    if source_name and source_name != ":memory:" and Path(source_name).resolve() == DATABASE_PATH.resolve():
+        backup_directory = Path(__file__).resolve().parents[1] / "backups"
+        backup_directory.mkdir(parents=True, exist_ok=True)
+        backup_path = backup_directory / f"real_estate_before_advertisement_cleanup_{datetime.now():%Y%m%d_%H%M%S}.db"
+        destination = sqlite3.connect(backup_path)
+        try:
+            connection.backup(destination)
+        finally:
+            destination.close()
+        if not backup_path.exists() or backup_path.stat().st_size == 0:
+            raise RuntimeError("매물별 광고 삭제 전 보호 사본을 확인하지 못했습니다.")
+    connection.execute("DROP TRIGGER IF EXISTS listing_advertisements_set_updated_at")
+    connection.execute("DROP TABLE listing_advertisements")
 
 
 def _backup_before_today_task_completion_migration(connection: sqlite3.Connection) -> None:

@@ -1,4 +1,4 @@
-"""현재 매물 회차의 광고 채널과 상태를 빠르게 관리하는 화면."""
+"""월별 광고비 기록과 광고 문구 만들기 화면."""
 
 from __future__ import annotations
 
@@ -7,271 +7,90 @@ from datetime import date
 import streamlit as st
 
 from services.advertisement_copy_service import PROPERTY_POSITIONING_COPY, ROOM_TYPES, generate_lead_ad_copy, parse_optional_amount, room_title_templates_for_room_type
-from services.advertisement_service import ADVERTISING_CHANNELS, ADVERTISING_STATUSES, change_advertisement, remove_advertisement, save_advertisement, validate_advertisement
-from services.record_number import listing_number
-from storage.advertisement_repository import get_advertisements
-from storage.listing_repository import search_listing_rounds
+from services.advertisement_cost_service import ADVERTISING_COST_CHANNELS, remove_monthly_cost, save_monthly_cost, validate_monthly_advertising_cost
+from storage.advertisement_cost_repository import get_monthly_advertising_costs
 
 
-def _listing_label(item: dict) -> str:
-    unit = item["unit_number"] if item["unit_number"].endswith("호") else f"{item['unit_number']}호"
-    return f"{listing_number(item['listing_id'])} · {item['building_name']} · {item['lot_address']} · {unit} · 접수일 {item['received_date']} · {item['listing_status']}"
-
-
-def _advertisement_rows(items: list[dict]) -> list[dict]:
-    return [{
-        "매물번호": listing_number(item["listing_id"]), "건물명": item["building_name"], "지번": item["lot_address"], "호실": item["unit_number"],
-        "매물 상태": item["listing_status"], "광고 채널": item["advertising_channel"],
-        "현재 광고 상태": item["advertising_status"], "마지막 광고 확인일": item["last_checked_date"] or "-",
-    } for item in items]
-
-
-def _clear_listing_channel_search() -> None:
-    """광고 채널 연결 대상 매물 검색을 새로 시작한다."""
-    st.session_state.pop("advertisement_listing_query", None)
-    st.session_state.pop("advertisement_selected_listing", None)
-
-
-def _render_listing_advertisements(selected: dict) -> None:
-    st.markdown("#### 선택한 매물의 광고 현황")
-    st.success(f"선택한 매물: {_listing_label(selected)}")
-    if st.button("다른 매물 검색", key="clear_advertisement_listing", on_click=_clear_listing_channel_search):
-        st.rerun()
-
-    existing = get_advertisements(listing_id=selected["listing_id"])
-    if existing:
-        st.dataframe(_advertisement_rows(existing), width="stretch", hide_index=True)
-        st.markdown("##### 연결된 채널 상태 변경")
-        for item in existing:
-            left, middle, right, remove_column = st.columns([2, 2, 2, 1])
-            with left:
-                st.text_input("광고 채널", value=item["advertising_channel"], disabled=True, key=f"advertisement_channel_{item['advertisement_id']}")
-            with middle:
-                status_index = ADVERTISING_STATUSES.index(item["advertising_status"]) if item["advertising_status"] in ADVERTISING_STATUSES else 0
-                status = st.selectbox("현재 광고 상태", ADVERTISING_STATUSES, index=status_index, key=f"advertisement_status_{item['advertisement_id']}")
-            with right:
-                checked_date = st.date_input("마지막 광고 확인일", value=date.fromisoformat(item["last_checked_date"]) if item["last_checked_date"] else None, key=f"advertisement_checked_{item['advertisement_id']}")
-            with remove_column:
-                st.caption(" ")
-                if st.button("저장", key=f"advertisement_save_{item['advertisement_id']}"):
-                    try:
-                        change_advertisement(item["advertisement_id"], status, checked_date)
-                    except ValueError as error:
-                        st.error(str(error))
-                    else:
-                        st.success(f"{item['advertising_channel']} 광고 상태를 수정했습니다.")
-                        st.rerun()
-                if st.button("제거", key=f"advertisement_remove_{item['advertisement_id']}"):
-                    try:
-                        remove_advertisement(item["advertisement_id"])
-                    except ValueError as error:
-                        st.error(str(error))
-                    else:
-                        st.success(f"{item['advertising_channel']} 광고 현황을 제거했습니다.")
-                        st.rerun()
-    else:
-        st.info("연결된 광고 채널이 없습니다. 아래에서 현재 광고 채널을 추가해 주세요.")
-
-    st.markdown("##### 광고 채널 추가")
-    with st.form(f"advertisement_create_{selected['listing_id']}"):
-        left, middle, right = st.columns(3)
+def _render_monthly_advertising_costs() -> None:
+    st.markdown("#### 월별 광고비 기록")
+    st.caption("매물별 광고 연결 없이 월별 채널 광고비만 기록합니다. 같은 기준연월·채널을 다시 저장하면 기존 금액을 수정합니다.")
+    with st.form("monthly_advertising_cost_create"):
+        left, middle, right, last = st.columns(4)
         with left:
-            choice = st.selectbox("광고 채널", ADVERTISING_CHANNELS)
-            custom_channel = st.text_input("직접 입력 채널", disabled=choice != "직접입력", placeholder="예: 지역 커뮤니티")
+            year_month = st.text_input("기준연월", value=date.today().strftime("%Y-%m"), placeholder="예: 2026-08")
         with middle:
-            status = st.selectbox("현재 광고 상태", ADVERTISING_STATUSES, index=0)
+            choice = st.selectbox("광고 채널", ADVERTISING_COST_CHANNELS)
+            custom = st.text_input("기타 채널", disabled=choice != "기타")
         with right:
-            checked_date = st.date_input("마지막 광고 확인일", value=date.today())
-        submitted = st.form_submit_button("광고 채널 추가", type="primary")
+            amount = st.number_input("월 광고비 (만원)", min_value=0, step=10, value=None)
+        with last:
+            memo = st.text_input("메모 (선택)")
+        submitted = st.form_submit_button("월별 광고비 저장", type="primary")
     if submitted:
-        advertisement, errors = validate_advertisement({"channel_choice": choice, "custom_channel": custom_channel, "advertising_status": status, "last_checked_date": checked_date})
+        values, errors = validate_monthly_advertising_cost({"year_month": year_month, "channel_choice": choice, "custom_channel": custom, "monthly_cost_manwon": amount, "memo": memo})
         if errors:
             for error in errors:
                 st.error(error)
         else:
-            try:
-                save_advertisement(selected["listing_id"], advertisement or {})
-            except ValueError as error:
-                st.error(str(error))
-            else:
-                st.success("광고 채널을 연결했습니다.")
-                st.rerun()
-
-
-def _render_current_advertisements() -> None:
-    st.markdown("#### 현재 광고 현황")
-    with st.form("advertisement_search_form"):
-        left, middle, right, fourth = st.columns([2, 1, 1, 1])
-        with left:
-            query = st.text_input("건물명·지번·호수 검색", key="advertisement_query")
-        with middle:
-            channels = st.multiselect("광고 채널", ["당근", "직방", "네이버"], key="advertisement_channel_filter")
-        with right:
-            channel_query = st.text_input("직접 입력 채널 검색", key="advertisement_channel_query")
-        with fourth:
-            statuses = st.multiselect("현재 광고 상태", ADVERTISING_STATUSES, key="advertisement_status_filter")
-        searched = st.form_submit_button("광고 현황 조회", type="primary")
-    if searched:
-        st.session_state["advertisement_has_searched"] = True
-    if not st.session_state.get("advertisement_has_searched", False):
-        st.info("조건을 입력한 뒤 `광고 현황 조회`를 누르면 현재 광고 현황이 표시됩니다.")
-        return
-    items = get_advertisements(query=query, channels=channels, channel_query=channel_query, statuses=statuses)
-    st.caption(f"현재 광고 현황 {len(items)}건")
-    if items:
-        st.dataframe(_advertisement_rows(items), width="stretch", hide_index=True)
-        st.markdown("##### 조회 결과 빠른 수정·삭제")
-        labels = [f"{item['building_name']} · {item['lot_address']} · {item['unit_number']}호 · {item['advertising_channel']} · {item['advertising_status']}" for item in items]
-        selected_label = st.selectbox("수정하거나 삭제할 광고 현황", labels, key="advertisement_quick_target")
-        selected = items[labels.index(selected_label)]
-        left, middle, _ = st.columns(3)
-        with left:
-            status_index = ADVERTISING_STATUSES.index(selected["advertising_status"]) if selected["advertising_status"] in ADVERTISING_STATUSES else 0
-            status = st.selectbox("현재 광고 상태", ADVERTISING_STATUSES, index=status_index, key=f"advertisement_quick_status_{selected['advertisement_id']}")
-        with middle:
-            checked_date = st.date_input("마지막 광고 확인일", value=date.fromisoformat(selected["last_checked_date"]) if selected["last_checked_date"] else None, key=f"advertisement_quick_checked_{selected['advertisement_id']}")
-        save_column, delete_column, _ = st.columns(3)
-        with save_column:
-            if st.button("광고 현황 저장", type="primary", key=f"advertisement_quick_save_{selected['advertisement_id']}"):
-                try:
-                    change_advertisement(selected["advertisement_id"], status, checked_date)
-                except ValueError as error:
-                    st.error(str(error))
-                else:
-                    st.success(f"{selected['advertising_channel']} 광고 현황을 수정했습니다.")
-                    st.rerun()
-        with delete_column:
-            confirmed = st.checkbox("이 광고 현황만 삭제", key=f"advertisement_quick_delete_confirm_{selected['advertisement_id']}")
-            if st.button("광고 현황 삭제", type="secondary", disabled=not confirmed, key=f"advertisement_quick_delete_{selected['advertisement_id']}"):
-                try:
-                    remove_advertisement(selected["advertisement_id"])
-                except ValueError as error:
-                    st.error(str(error))
-                else:
-                    st.success(f"{selected['advertising_channel']} 광고 현황을 삭제했습니다. 매물 기록은 유지됩니다.")
-                    st.rerun()
-    else:
-        st.info("조건에 맞는 현재 광고 현황이 없습니다.")
-
-
-def _render_advertisement_registration() -> None:
-    st.markdown("#### 매물에 광고 채널 연결")
-    st.caption("현재 운영 중인 매물 회차를 선택한 뒤, 광고 채널·현재 상태·마지막 확인일만 관리합니다. 매물 조건은 이 화면에서 바꾸지 않습니다.")
-    query_column, reset_column = st.columns([4, 1])
-    with query_column:
-        query = st.text_input("연결할 현재 매물 찾기", key="advertisement_listing_query", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")
-    with reset_column:
-        st.caption(" ")
-        if st.button("검색 초기화", key="advertisement_listing_search_reset", on_click=_clear_listing_channel_search):
+            save_monthly_cost(values or {})
+            st.success("월별 광고비를 저장했습니다.")
             st.rerun()
-    selected = st.session_state.get("advertisement_selected_listing")
-    if selected is None:
-        if len(query.strip()) < 2:
-            st.info("현재 매물을 찾기 위해 2글자 이상 입력해 주세요.")
-            return
-        results = [item for item in search_listing_rounds(query) if item["closed_date"] is None and item["listing_status"] not in ("계약 완료", "종료")]
-        if not results:
-            st.info("조건에 맞는 현재 매물이 없습니다.")
-            return
-        for item in results:
-            if st.button(_listing_label(item), key=f"advertisement_listing_{item['listing_id']}", width="stretch"):
-                st.session_state["advertisement_selected_listing"] = item
-                st.rerun()
-    else:
-        _render_listing_advertisements(selected)
+    records = get_monthly_advertising_costs()
+    st.caption(f"저장된 월별 광고비 {len(records)}건")
+    if not records:
+        st.info("아직 저장된 월별 광고비가 없습니다.")
+        return
+    st.dataframe([{"기준연월": item["year_month"], "광고 채널": item["advertising_channel"], "월 광고비 (만원)": item["monthly_cost_manwon"], "메모": item["memo"] or "-", "수정일시": item["updated_at"]} for item in records], width="stretch", hide_index=True)
+    labels = {item["cost_id"]: f"{item['year_month']} · {item['advertising_channel']} · {item['monthly_cost_manwon']:,}만원" for item in records}
+    selected_id = st.selectbox("삭제할 월별 광고비 선택", list(labels), format_func=labels.get)
+    confirmed = st.checkbox("선택한 월별 광고비 기록만 삭제하는 것을 확인했습니다.")
+    if st.button("선택한 월별 광고비 삭제", disabled=not confirmed, type="secondary"):
+        remove_monthly_cost(selected_id)
+        st.success("선택한 월별 광고비 기록을 삭제했습니다.")
+        st.rerun()
 
 
 def _render_ad_copy_generator() -> None:
-    """매물 DB와 연결하지 않고 직접 입력한 사실만으로 광고 문구를 만든다."""
     st.markdown("#### 광고 문구 만들기")
-    st.caption("매물 DB와 연결하지 않습니다. 신축급·구축과 강조할 점을 직접 선택하면, 지금 확인한 사실만으로 광고문을 만듭니다. 입력값과 생성 결과는 저장되지 않습니다.")
+    st.caption("매물 DB와 연결하지 않습니다. 직접 입력한 사실만으로 광고문을 만들며, 입력값과 생성 결과는 저장되지 않습니다.")
     st.warning("비밀번호·연락처·내부 메모는 입력하거나 광고문에 넣지 마세요.")
-
     location_column, room_type_column, transaction_type_column = st.columns([2, 1, 1])
-    with location_column:
-        location = st.text_input("지역 또는 지번", placeholder="예: 장재리 1684", key="ad_copy_location")
-    with room_type_column:
-        room_type = st.selectbox("방 형태", ROOM_TYPES, key="ad_copy_room_type")
-    with transaction_type_column:
-        transaction_type = st.selectbox("거래 방식", ["월세", "전세", "보증부월세", "가격 문의"], key="ad_copy_transaction_type")
-
+    with location_column: location = st.text_input("지역 또는 지번", placeholder="예: 장재리 1684", key="ad_copy_location")
+    with room_type_column: room_type = st.selectbox("방 형태", ROOM_TYPES, key="ad_copy_room_type")
+    with transaction_type_column: transaction_type = st.selectbox("거래 방식", ["월세", "전세", "보증부월세", "가격 문의"], key="ad_copy_transaction_type")
     title_template = st.selectbox("룸 제목 템플릿", ["기본 제목", *room_title_templates_for_room_type(room_type)], key=f"ad_copy_room_title_template_{room_type}")
-    if title_template != "기본 제목":
-        st.caption("선택한 템플릿이 광고 제목으로 그대로 사용됩니다. 실제 매물 상태와 맞는 문구를 선택해 주세요.")
-
     deposit_column, rent_column, fee_column, available_column = st.columns(4)
-    with deposit_column:
-        deposit_text = st.text_input("보증금 (만원 · 선택)", placeholder="예: 500", key="ad_copy_deposit")
-    with rent_column:
-        rent_text = st.text_input("월세 (만원 · 선택)", placeholder="예: 40", key="ad_copy_rent")
-    with fee_column:
-        management_fee_text = st.text_input("관리비 (만원 · 선택)", placeholder="예: 8", key="ad_copy_management_fee")
-    with available_column:
-        available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
-
+    with deposit_column: deposit_text = st.text_input("보증금 (만원 · 선택)", placeholder="예: 500", key="ad_copy_deposit")
+    with rent_column: rent_text = st.text_input("월세 (만원 · 선택)", placeholder="예: 40", key="ad_copy_rent")
+    with fee_column: management_fee_text = st.text_input("관리비 (만원 · 선택)", placeholder="예: 8", key="ad_copy_management_fee")
+    with available_column: available_date = st.text_input("입주 가능일 (선택)", placeholder="예: 즉시 가능", key="ad_copy_available_date")
     st.markdown("##### 매물 성격")
     property_condition = st.radio("매물 컨디션", ["신축급", "구축"], horizontal=True, key="ad_copy_property_condition")
-    positioning_types = list(PROPERTY_POSITIONING_COPY[property_condition])
-    positioning_type = st.radio("이 매물에서 가장 강조할 점", positioning_types, horizontal=True, key=f"ad_copy_positioning_type_{property_condition}")
-    special_label = "이 매물의 특별한 점 *" if positioning_type == "특별매물" else "특별 포인트 추가 (선택)"
-    special_placeholder = "예: 안방 양창으로 개방감이 좋음" if positioning_type == "특별매물" else "예: 대형 붙박이장과 길게 빠진 베란다 공간"
-    special_point = st.text_input(special_label, placeholder=special_placeholder, key="ad_copy_special_point")
-    option_text = st.text_input("옵션 문구 수정 (선택)", placeholder="예: 냉장고 · 세탁기 · 에어컨 · TV", key="ad_copy_option_text")
-    st.caption("일반 매물은 컨디션과 강조할 점만 선택하면 됩니다. 옵션을 입력하지 않으면 생활 기본 옵션 문구가 적용되며, 특별포인트와 수정 옵션은 실제로 확인한 경우에만 입력하세요.")
-    notice_left, notice_right = st.columns(2)
-    with notice_left:
-        actual_listing_checked = st.checkbox("실매물 확인됨 — ‘본 매물은 실매물입니다’ 포함", key="ad_copy_actual_listing")
-    with notice_right:
-        actual_photo_checked = st.checkbox("실제 호실 사진 확인됨 — 사진 안내 포함", key="ad_copy_actual_photo")
+    positioning_type = st.radio("이 매물에서 가장 강조할 점", list(PROPERTY_POSITIONING_COPY[property_condition]), horizontal=True, key=f"ad_copy_positioning_type_{property_condition}")
+    special_point = st.text_input("이 매물의 특별한 점 *" if positioning_type == "특별매물" else "특별 포인트 추가 (선택)", key="ad_copy_special_point")
+    option_text = st.text_input("옵션 문구 수정 (선택)", key="ad_copy_option_text")
+    actual_listing_checked = st.checkbox("실매물 확인됨 — ‘본 매물은 실매물입니다’ 포함", key="ad_copy_actual_listing")
+    actual_photo_checked = st.checkbox("실제 호실 사진 확인됨 — 사진 안내 포함", key="ad_copy_actual_photo")
     if st.button("광고 문구 생성", type="primary", key="ad_copy_generate"):
         try:
-            result = generate_lead_ad_copy(
-                location=location,
-                room_type=room_type,
-                title_template="" if title_template == "기본 제목" else title_template,
-                transaction_type=transaction_type,
-                deposit=parse_optional_amount(deposit_text, "보증금"),
-                rent=parse_optional_amount(rent_text, "월세"),
-                management_fee=parse_optional_amount(management_fee_text, "관리비"),
-                available_date=available_date,
-                property_condition=property_condition,
-                positioning_type=positioning_type,
-                special_point=special_point,
-                option_text=option_text,
-                include_actual_listing_notice=actual_listing_checked,
-                include_actual_photo_notice=actual_photo_checked,
-            )
+            st.session_state["ad_copy_result"] = generate_lead_ad_copy(location=location, room_type=room_type, title_template="" if title_template == "기본 제목" else title_template, transaction_type=transaction_type, deposit=parse_optional_amount(deposit_text, "보증금"), rent=parse_optional_amount(rent_text, "월세"), management_fee=parse_optional_amount(management_fee_text, "관리비"), available_date=available_date, property_condition=property_condition, positioning_type=positioning_type, special_point=special_point, option_text=option_text, include_actual_listing_notice=actual_listing_checked, include_actual_photo_notice=actual_photo_checked)
         except ValueError as error:
             st.error(str(error))
-        else:
-            st.session_state["ad_copy_result"] = result
-            st.session_state.pop("ad_copy_title_editor", None)
-            st.session_state.pop("ad_copy_body_editor", None)
-
     result = st.session_state.get("ad_copy_result")
-    if not result:
-        return
-    st.divider()
-    st.markdown("##### 생성 결과")
-    title = st.text_area("광고 제목 수정", value=result["title"], key="ad_copy_title_editor", height=68)
-    body = st.text_area("광고 상세문구 수정", value=result["body"], key="ad_copy_body_editor", height=360)
-    st.caption("각 문구 오른쪽 위 복사 아이콘을 누르면 바로 복사할 수 있습니다.")
-    title_column, body_column = st.columns(2)
-    with title_column:
-        st.markdown("###### 제목 복사")
-        st.code(title, language=None)
-    with body_column:
-        st.markdown("###### 본문 복사")
-        st.code(body, language=None)
+    if result:
+        st.divider()
+        title = st.text_area("광고 제목 수정", value=result["title"], key="ad_copy_title_editor", height=68)
+        body = st.text_area("광고 상세문구 수정", value=result["body"], key="ad_copy_body_editor", height=360)
+        left, right = st.columns(2)
+        with left: st.code(title, language=None)
+        with right: st.code(body, language=None)
 
 
 def render_advertisement_management() -> None:
     st.subheader("광고관리")
-    st.markdown("<p class='section-note'>현재 매물 회차에 당근·직방·네이버 등 광고 채널을 복수로 연결하고, 현재 광고 상태만 빠르게 관리합니다.</p>", unsafe_allow_html=True)
-    mode = st.radio("광고관리 메뉴", ["현재 광고 현황", "매물에 광고 채널 연결", "광고 문구 만들기"], horizontal=True, key="advertisement_management_mode")
-    if mode == "현재 광고 현황":
-        _render_current_advertisements()
-    elif mode == "매물에 광고 채널 연결":
-        _render_advertisement_registration()
+    st.markdown("<p class='section-note'>월별 광고비 기록과 광고 문구 만들기만 관리합니다. 매물별 광고 조회·연결 기능은 사용하지 않습니다.</p>", unsafe_allow_html=True)
+    mode = st.radio("광고관리 메뉴", ["월별 광고비 기록", "광고 문구 만들기"], horizontal=True, key="advertisement_management_mode")
+    if mode == "월별 광고비 기록":
+        _render_monthly_advertising_costs()
     else:
         _render_ad_copy_generator()
