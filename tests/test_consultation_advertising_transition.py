@@ -45,7 +45,8 @@ def run() -> None:
         cost, errors = validate_monthly_advertising_cost({"year_month": "2026-08-01", "channel_choice": "당근", "monthly_cost_manwon": 100, "memo": "검증"})
         assert not errors and cost is not None
         save_monthly_advertising_cost(cost, database_path)
-        assert get_monthly_advertising_costs(path=database_path)[0]["monthly_cost_manwon"] == 100
+        saved_cost = next(item for item in get_monthly_advertising_costs(path=database_path) if item["year_month"] == "2026-08" and item["advertising_channel"] == "당근")
+        assert saved_cost["monthly_cost_manwon"] == 100
 
 
 if __name__ == "__main__":

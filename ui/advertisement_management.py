@@ -11,6 +11,14 @@ from services.advertisement_cost_service import ADVERTISING_COST_CHANNELS, remov
 from storage.advertisement_cost_repository import get_monthly_advertising_costs
 
 
+def _set_ad_copy_result(result: dict[str, str], *, reset_editor: bool = False) -> None:
+    """새 생성본 또는 수정본을 결과와 편집칸에 함께 반영한다."""
+    st.session_state["ad_copy_result"] = result
+    if reset_editor:
+        st.session_state["ad_copy_title_editor"] = result["title"]
+        st.session_state["ad_copy_body_editor"] = result["body"]
+
+
 def _render_monthly_advertising_costs() -> None:
     st.markdown("#### 월별 광고비 기록")
     st.caption("매물별 광고 연결 없이 월별 채널 광고비만 기록합니다. 같은 기준연월·채널을 다시 저장하면 기존 금액을 수정합니다.")
@@ -73,17 +81,22 @@ def _render_ad_copy_generator() -> None:
     actual_photo_checked = st.checkbox("실제 호실 사진 확인됨 — 사진 안내 포함", key="ad_copy_actual_photo")
     if st.button("광고 문구 생성", type="primary", key="ad_copy_generate"):
         try:
-            st.session_state["ad_copy_result"] = generate_lead_ad_copy(location=location, room_type=room_type, title_template="" if title_template == "기본 제목" else title_template, transaction_type=transaction_type, deposit=parse_optional_amount(deposit_text, "보증금"), rent=parse_optional_amount(rent_text, "월세"), management_fee=parse_optional_amount(management_fee_text, "관리비"), available_date=available_date, property_condition=property_condition, positioning_type=positioning_type, special_point=special_point, option_text=option_text, include_actual_listing_notice=actual_listing_checked, include_actual_photo_notice=actual_photo_checked)
+            _set_ad_copy_result(generate_lead_ad_copy(location=location, room_type=room_type, title_template="" if title_template == "기본 제목" else title_template, transaction_type=transaction_type, deposit=parse_optional_amount(deposit_text, "보증금"), rent=parse_optional_amount(rent_text, "월세"), management_fee=parse_optional_amount(management_fee_text, "관리비"), available_date=available_date, property_condition=property_condition, positioning_type=positioning_type, special_point=special_point, option_text=option_text, include_actual_listing_notice=actual_listing_checked, include_actual_photo_notice=actual_photo_checked), reset_editor=True)
         except ValueError as error:
             st.error(str(error))
     result = st.session_state.get("ad_copy_result")
     if result:
         st.divider()
-        title = st.text_area("광고 제목 수정", value=result["title"], key="ad_copy_title_editor", height=68)
-        body = st.text_area("광고 상세문구 수정", value=result["body"], key="ad_copy_body_editor", height=360)
+        title = st.text_area("광고 제목 수정", key="ad_copy_title_editor", height=68)
+        body = st.text_area("광고 상세문구 수정", key="ad_copy_body_editor", height=360)
+        applied = st.button("수정 내용 적용", key="ad_copy_apply")
+        if applied:
+            _set_ad_copy_result({"title": title, "body": body})
+            st.success("수정한 광고 문구를 적용했습니다.")
+        preview = st.session_state["ad_copy_result"]
         left, right = st.columns(2)
-        with left: st.code(title, language=None)
-        with right: st.code(body, language=None)
+        with left: st.code(preview["title"], language=None)
+        with right: st.code(preview["body"], language=None)
 
 
 def render_advertisement_management() -> None:

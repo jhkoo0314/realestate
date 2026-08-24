@@ -37,11 +37,9 @@ INPUT_KEYS = [
     "room_type", "direction", "access_method", "unit_access_password",
     "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "available_from_date", "move_out_due_date",
-    "has_listing_photos",
     "listing_holder_choice", "listing_holder_custom", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
 ]
 
-PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
 REGISTRATION_ROOM_TYPES = ROOM_TYPES
 
 
@@ -63,10 +61,6 @@ def _clear_current_listing_inputs() -> None:
     for key in list(st.session_state):
         if key.startswith(("edit_", "close_")):
             st.session_state.pop(key, None)
-
-
-def _status_index(options: list[str], value: str | None) -> int:
-    return options.index(value) if value in options else 0
 
 
 def _format_phone_input(key: str) -> None:
@@ -94,15 +88,11 @@ def _fill_floor_from_unit_number() -> None:
 
 
 def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
-    """사진 보유 여부와 재확인 예정일을 입력한다."""
+    """매물 등록·수정에서 재확인 예정일만 입력한다."""
     values = values or {}
     st.markdown("##### 확인·관리 사항")
-    st.caption("사진 보유 여부와 재확인 예정일을 저장하면 현황 조회와 확인 업무에 반영됩니다.")
-    left, right = st.columns(2)
-    with left:
-        st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=_status_index(PHOTO_AVAILABILITY, values.get("has_listing_photos")), key=f"{key_prefix}_has_listing_photos", help="없음이면 사진 촬영 필요, 확인 필요면 사진 확인 필요로 자동 표시됩니다.")
-    with right:
-        st.date_input("재확인 예정일", value=_date_value(values.get("next_check_date")), key=f"{key_prefix}_next_check_date")
+    st.caption("재확인 예정일을 저장하면 현황 조회와 확인 업무에 반영됩니다. 사진 보유 여부는 매물 현황 리스트에서만 확인·수정합니다.")
+    st.date_input("재확인 예정일", value=_date_value(values.get("next_check_date")), key=f"{key_prefix}_next_check_date")
 
 
 def _render_listing_holder_fields(key_prefix: str, current_value: str | None = None) -> None:
@@ -396,7 +386,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "availability_type": st.session_state.get("edit_availability_type"),
             "available_from_date": st.session_state.get("edit_available_from_date"),
             "move_out_due_date": st.session_state.get("edit_move_out_due_date"),
-            "has_listing_photos": st.session_state.get("edit_has_listing_photos"),
+            "has_listing_photos": listing["has_listing_photos"],
             "cleaning_status": listing["cleaning_status"],
             "wallpaper_status": listing["wallpaper_status"],
             "repair_status": listing["repair_status"],
@@ -424,7 +414,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
 
     with st.expander("이 매물 종료 처리"):
         st.warning("종료해도 기록은 삭제되지 않고 과거 이력에 남습니다.")
-        close_reason = st.selectbox("종료 사유", ["계약 완료", "타 부동산 계약", "임대인 보류", "광고 중단", "정보 오류", "기타"], key="close_reason")
+        close_reason = st.selectbox("종료 사유", ["계약 완료", "타 부동산 계약", "기타"], key="close_reason")
         close_date = st.date_input("종료일", value=date.today(), key="close_date")
         if st.button("종료 처리", type="secondary"):
             try:
@@ -527,7 +517,6 @@ def _render_relisting_form(unit_id: int) -> None:
             "available_from_date": st.session_state.get("relisting_available_from_date"),
             "received_date": st.session_state.get("relisting_received_date"),
             "move_out_due_date": st.session_state.get("relisting_move_out_due_date"),
-            "has_listing_photos": st.session_state.get("relisting_has_listing_photos"),
             "listing_holder_choice": st.session_state.get("relisting_listing_holder_choice"),
             "listing_holder_custom": st.session_state.get("relisting_listing_holder_custom"),
             "next_check_date": st.session_state.get("relisting_next_check_date"),

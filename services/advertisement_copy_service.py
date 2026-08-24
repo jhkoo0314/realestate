@@ -369,7 +369,7 @@ def generate_ad_copy(
     core_lines.extend(f"✔ {FEATURE_SENTENCES[feature]}" for feature in features)
     core_lines.append(f"✔ 보증금 {deposit:,} / 월세 {rent:,}")
     if available_date.strip():
-        core_lines.append(f"✔ 입주 가능: {available_date.strip()}")
+        core_lines.append(f"✔ 입주가능일: {available_date.strip()}")
     if additional_text.strip():
         core_lines.extend(f"✔ {line.strip()}" for line in additional_text.splitlines() if line.strip())
     if output_length == "짧은형":
@@ -449,18 +449,18 @@ def generate_lead_ad_copy(
     price_parts: list[str] = []
     if transaction_type == "전세":
         if deposit is not None:
-            price_parts.append(f"전세 {deposit:,}만원")
+            price_parts.append(f"전세: {deposit:,}만원")
     elif transaction_type == "가격 문의":
         price_parts.append("가격은 문의로 확인해 주세요.")
     else:
         if deposit is not None:
-            price_parts.append(f"보증금 {deposit:,}만원")
+            price_parts.append(f"보증금: {deposit:,}만원")
         if rent is not None:
-            price_parts.append(f"월세 {rent:,}만원")
+            price_parts.append(f"월세: {rent:,}만원")
     if management_fee is not None:
-        price_parts.append(f"관리비 {management_fee:,}만원")
+        price_parts.append(f"관리비: {management_fee:,}만원")
     if clean(available_date):
-        price_parts.append(f"입주 가능 {clean(available_date)}")
+        price_parts.append(f"입주가능일: {clean(available_date)}")
     if not price_parts:
         price_parts.append("가격은 문의로 확인해 주세요.")
 
@@ -480,12 +480,12 @@ def generate_lead_ad_copy(
         "① 이 매물의 포인트",
     ]
     lines.extend(f"• {point}" for point in positioning_points)
-    lines.extend(["", "② 조건"])
+    lines.extend(["", "💰 조건"])
     lines.extend(price_parts)
-    lines.extend(["", "③ 위치", clean(location) or "위치는 문의로 확인해 주세요."])
-    lines.extend(["", "④ 옵션", clean(option_text) or LEAD_DEFAULT_OPTION_TEXT])
+    lines.extend(["", "📍 위치", clean(location) or "위치는 문의로 확인해 주세요."])
+    lines.extend(["", "🛋️ 옵션", clean(option_text) or LEAD_DEFAULT_OPTION_TEXT])
     lines.extend([
-        "", "⑤ 비교 상담", *LEAD_COMPARISON_CONSULTATION_TEXT,
+        "", "🤝 비교 상담", *LEAD_COMPARISON_CONSULTATION_TEXT,
         "", "📌 안내사항",
     ])
     lines.extend(f"✔ {notice}" for notice in notices)

@@ -19,9 +19,8 @@ from storage.database import (
 
 
 PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
-SITE_PREPARATION_STATUSES = ["확인 필요", "문제 없음", "완료", "필요", "진행 중"]
 TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "사진 확인 필요", "현장 상태 확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
-CLOSE_REASONS = ["계약 완료", "타 부동산 계약", "임대인 보류", "광고 중단", "정보 오류", "기타"]
+CLOSE_REASONS = ["계약 완료", "타 부동산 계약", "기타"]
 
 
 def _clear_filters() -> None:
@@ -106,14 +105,6 @@ def _summary(listings: list[dict]) -> dict[str, int]:
     }
 
 
-def _photo_availability_text(item: dict) -> str:
-    if item["has_listing_photos"] == "없음":
-        return "없음 · 사진 촬영 필요"
-    if item["has_listing_photos"] == "확인 필요":
-        return "확인 필요 · 사진 확인 필요"
-    return item["has_listing_photos"] or "확인 필요"
-
-
 def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[dict]:
     rows = []
     for item in listings:
@@ -125,8 +116,8 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
             "매물번호": listing_number(item["listing_id"]), "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
-            "입주 가능": availability, "사진 보유": _photo_availability_text(item), "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
-            "퇴실 예정일": item["move_out_due_date"] or "-", "재확인일": item["next_check_date"] or "-", "다음 연락일": item["next_contact_date"] or "-", "메모": item["listing_note"] or "-",
+            "입주 가능": availability, "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
+            "퇴실 예정일": item["move_out_due_date"] or "-", "메모": item["listing_note"] or "-",
         }
         if show_closure:
             row["종료일"] = item["closed_date"] or "-"
@@ -158,17 +149,6 @@ def _render_quick_edit(selected: dict) -> None:
     holder_custom = ""
     if holder_choice == "직접입력":
         holder_custom = st.text_input("매물 보유처 직접입력", value=selected["listing_holder"] if holder_initial == "직접입력" else "", key=f"quick_listing_holder_custom_{selected['listing_id']}", placeholder="예: 지역 주택관리업체")
-    st.markdown("##### 현장 준비 상태")
-    cleaning_column, wallpaper_column, repair_column = st.columns(3)
-    with cleaning_column:
-        cleaning_index = SITE_PREPARATION_STATUSES.index(selected["cleaning_status"]) if selected["cleaning_status"] in SITE_PREPARATION_STATUSES else 0
-        cleaning_status = st.selectbox("청소 상태", SITE_PREPARATION_STATUSES, index=cleaning_index, key=f"quick_cleaning_{selected['listing_id']}")
-    with wallpaper_column:
-        wallpaper_index = SITE_PREPARATION_STATUSES.index(selected["wallpaper_status"]) if selected["wallpaper_status"] in SITE_PREPARATION_STATUSES else 0
-        wallpaper_status = st.selectbox("도배 상태", SITE_PREPARATION_STATUSES, index=wallpaper_index, key=f"quick_wallpaper_{selected['listing_id']}")
-    with repair_column:
-        repair_index = SITE_PREPARATION_STATUSES.index(selected["repair_status"]) if selected["repair_status"] in SITE_PREPARATION_STATUSES else 0
-        repair_status = st.selectbox("수리 상태", SITE_PREPARATION_STATUSES, index=repair_index, key=f"quick_repair_{selected['listing_id']}")
     if st.button("빠른 수정 저장", type="primary", key=f"quick_save_{selected['listing_id']}"):
         listing_holder = holder_custom.strip() if holder_choice == "직접입력" else (None if holder_choice == "미입력" else holder_choice)
         if holder_choice == "직접입력" and not listing_holder:
@@ -176,14 +156,22 @@ def _render_quick_edit(selected: dict) -> None:
             return
         try:
             saved_has_photo = has_photo
-            update_listing_quick_fields(selected["listing_id"], status, saved_has_photo, _date_text(next_check), cleaning_status, wallpaper_status, repair_status, listing_holder)
+            update_listing_quick_fields(
+                selected["listing_id"],
+                status,
+                saved_has_photo,
+                _date_text(next_check),
+                selected["cleaning_status"],
+                selected["wallpaper_status"],
+                selected["repair_status"],
+                listing_holder,
+            )
             create_daily_backup()
         except Exception as error:
             st.error(f"수정하지 못했습니다. ({error})")
             return
         st.session_state["dashboard_quick_save_result"] = (
             f"빠른 수정 저장 완료: 상태 {status} · 사진 보유 {saved_has_photo} · "
-            f"청소 {cleaning_status} · 도배 {wallpaper_status} · 수리 {repair_status} · "
             f"보유처 {listing_holder or '미입력'} · 재확인일 {_date_text(next_check) or '미지정'}"
         )
         st.rerun()
