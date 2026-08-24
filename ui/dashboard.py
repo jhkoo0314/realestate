@@ -113,7 +113,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
         if availability == "날짜 지정" and item["available_from_date"]:
             availability = f"{item['available_from_date']} 입주"
         row = {
-            "매물번호": listing_number(item["listing_id"]), "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
+            "매물번호": listing_number(item["listing_id"]), "매물접수일": item["received_date"], "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
