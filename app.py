@@ -108,6 +108,9 @@ def main() -> None:
     apply_styles()
     if "selected_page" not in st.session_state:
         st.session_state.selected_page = PAGE_TODAY
+    requested_page = st.session_state.pop("requested_page", None)
+    if requested_page in PAGES:
+        st.session_state.selected_page = requested_page
     apply_task_shortcut()
     try:
         past_due_move_out_count = apply_past_due_move_out_statuses()

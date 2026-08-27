@@ -40,9 +40,9 @@ def _row(source: str, task: str, due_date: str | None, item: dict[str, Any], sta
 
 
 def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[dict[str, str]]]:
-    """당일, 지연, 날짜와 무관한 조건 확인 업무를 분리한다."""
+    """당일·지연된 날짜 업무를 매물·계약·상담에서 계산한다."""
     today_text = reference_date.isoformat()
-    result: dict[str, list[dict[str, str]]] = {"오늘": [], "지연": [], "상시 확인 필요": []}
+    result: dict[str, list[dict[str, str]]] = {"오늘": [], "지연": []}
 
     for listing in get_current_listings(path=path):
         if listing["next_check_date"] and listing["next_check_date"] <= today_text:
@@ -63,10 +63,6 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
                 ))
             elif remaining_days == 0:
                 result["오늘"].append(_row("매물", "퇴실 예정", move_out_due_date, listing, listing["listing_status"], "오늘"))
-        for task in listing["tasks"]:
-            if task != "재확인 필요":
-                result["상시 확인 필요"].append(_row("매물", task, None, listing, listing["listing_status"], "상시 확인 필요"))
-
     for consultation in get_consultations(path=path):
         due_date = consultation.get("next_contact_date")
         if due_date and due_date <= today_text and consultation["consultation_status"] != "종료":

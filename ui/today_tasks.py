@@ -126,16 +126,6 @@ def _render_date_task_table(section_title: str, title: str, source: str, rows: l
         _render_consultation_summary(selected_consultation_id)
 
 
-def _render_always_listing_table(rows: list[dict[str, Any]]) -> None:
-    with st.expander(f"상시 확인 필요 · {len(rows)}건", expanded=False):
-        if not rows:
-            st.info("날짜와 무관하게 확인할 매물 조건이 없습니다.")
-            return
-        hidden_columns = {"kind", "task_key", "source_record_id", "is_completed", "완료"}
-        hidden_columns.add("기한")
-        st.dataframe([{key: value for key, value in row.items() if key not in hidden_columns} for row in rows], width="stretch", hide_index=True)
-
-
 def _render_date_task_section(title: str, rows: list[dict[str, Any]], empty_message: str) -> None:
     st.markdown(f"#### {title}")
     if not rows:
@@ -157,13 +147,10 @@ def render_today_tasks() -> None:
         st.error(str(error))
         return
     show_completed = st.checkbox("완료 업무 보기", value=False, help="완료 체크한 오늘·지연 업무를 다시 확인할 때만 선택합니다.")
-    visible_tasks = {
-        key: [task for task in rows if show_completed or key == "상시 확인 필요" or not task["is_completed"]]
-        for key, rows in tasks.items()
-    }
-    metrics = st.columns(3)
-    for column, key in zip(metrics, ("오늘", "지연", "상시 확인 필요")):
-        count = sum(not task["is_completed"] for task in tasks[key]) if key in ("오늘", "지연") else len(tasks[key])
+    visible_tasks = {key: [task for task in rows if show_completed or not task["is_completed"]] for key, rows in tasks.items()}
+    metrics = st.columns(2)
+    for column, key in zip(metrics, ("오늘", "지연")):
+        count = sum(not task["is_completed"] for task in tasks[key])
         column.metric(key, count)
     st.caption("완료 업무는 기본으로 숨깁니다. `완료 업무 보기`를 선택하면 다시 확인할 수 있습니다. 계약 상태는 연결 매물에 연동되며, 상담 상태는 선택한 상담 기록에만 반영됩니다.")
     try:
@@ -181,4 +168,3 @@ def render_today_tasks() -> None:
         )
     _render_date_task_section("오늘 해야 할 일", visible_tasks["오늘"], "해당 업무가 없습니다.")
     _render_date_task_section("지연된 일", visible_tasks["지연"], "해당 업무가 없습니다.")
-    _render_always_listing_table(visible_tasks["상시 확인 필요"])

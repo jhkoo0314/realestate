@@ -313,7 +313,9 @@ def _render_lookup() -> None:
         st.session_state.pop("consultation_edit_target_id", None)
         st.rerun()
     if st.button("이 상담으로 계약 등록", key=f"consultation_to_contract_{detail['consultation_id']}", type="primary"):
-        st.session_state["selected_page"] = "계약관리"
+        # 상단 메뉴 위젯이 생성된 뒤에는 해당 위젯 값을 직접 바꿀 수 없다.
+        # 다음 재실행 시작 시 app.py가 이 요청을 적용한다.
+        st.session_state["requested_page"] = "계약관리"
         st.session_state["contract_management_mode"] = "계약 등록"
         st.session_state["contract_selected_consultation_id"] = detail["consultation_id"]
         st.rerun()

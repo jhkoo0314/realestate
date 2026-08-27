@@ -163,9 +163,9 @@ def create_consultation_excel(rows: list[dict[str, Any]]) -> bytes:
 
 
 def create_today_tasks_excel(tasks: dict[str, list[dict[str, Any]]]) -> bytes:
-    """오늘·지연·상시 확인 필요 업무만 명시한 열로 내보낸다."""
+    """오늘·지연 업무만 명시한 열로 내보낸다."""
     rows = []
-    for group in ("오늘", "지연", "상시 확인 필요"):
+    for group in ("오늘", "지연"):
         for task in tasks.get(group, []):
             rows.append({"구분": group, **{key: value for key, value in task.items() if key != "kind"}})
     return _create_excel(rows, TODAY_TASK_EXPORT_COLUMNS, "오늘 할 일")
