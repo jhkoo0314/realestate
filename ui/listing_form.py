@@ -479,7 +479,7 @@ def _render_relisting_form(unit_id: int) -> None:
     st.markdown("#### 현재 매물 조건")
     left, middle, right = st.columns(3)
     with left:
-        st.selectbox("매물 상태 *", LISTING_STATUSES, key="relisting_listing_status")
+        st.selectbox("매물 상태 *", LISTING_STATUSES, index=LISTING_STATUSES.index("공실"), key="relisting_listing_status")
         price_mode = st.radio("가격 입력 방식", ["새 가격 입력", "가격 확인 필요"], key="relisting_price_mode")
     with middle:
         if price_mode == "새 가격 입력":

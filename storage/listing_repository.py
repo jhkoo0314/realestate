@@ -11,7 +11,11 @@ from services.record_number import record_id_from_query
 
 
 def mark_past_due_move_out_listings_vacant(reference_date: date | None = None, path: Path = DATABASE_PATH) -> int:
-    """지난 퇴실 예정일의 현재 `퇴실 예정` 매물만 공실로 바꾼다."""
+    """지난 퇴실 예정일의 매물을 공실·즉시입주로 정리한다.
+
+    이전 실행에서 상태만 `공실`로 바뀐 기록도 함께 정리해, 남아 있는
+    퇴실 예정일과 `퇴실 후 협의` 입주 조건을 다음 앱 실행에서 복구한다.
+    """
     ensure_database_schema(path)
     기준일 = (reference_date or date.today()).isoformat()
     connection = get_connection(path)
@@ -19,9 +23,12 @@ def mark_past_due_move_out_listings_vacant(reference_date: date | None = None, p
         with connection:
             return connection.execute(
                 """UPDATE listings
-                   SET listing_status = '공실'
+                   SET listing_status = '공실',
+                       availability_type = '즉시입주',
+                       available_from_date = NULL,
+                       move_out_due_date = NULL
                    WHERE closed_date IS NULL
-                     AND listing_status = '퇴실 예정'
+                     AND listing_status IN ('퇴실 예정', '공실')
                      AND move_out_due_date IS NOT NULL
                      AND move_out_due_date < ?""",
                 (기준일,),
