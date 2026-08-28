@@ -121,11 +121,13 @@ def validate_consultation_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] 
     next_contact_date = _date_text(raw.get("next_contact_date"))
     if not activity_type: errors.append("상담 방식을 선택해 주세요.")
     if not stage: errors.append("결과 단계를 선택해 주세요.")
-    if stage == "종료":
+    if stage in ("종료", "계약 완료"):
+        if not closed_reason:
+            errors.append("상담 종료 사유를 선택해 주세요.")
         next_contact_date = None
     if errors:
         return None, errors
-    return {"activity_date": activity_date, "activity_type": activity_type, "activity_note": _text(raw.get("activity_note")), "stage_after_activity": stage, "visit_result": visit_result, "closed_reason": closed_reason, "next_contact_date": next_contact_date, "consultation_status": "종료" if stage == "종료" else "진행 중"}, []
+    return {"activity_date": activity_date, "activity_type": activity_type, "activity_note": _text(raw.get("activity_note")), "stage_after_activity": stage, "visit_result": visit_result, "closed_reason": closed_reason, "next_contact_date": next_contact_date, "consultation_status": "종료" if stage in ("종료", "계약 완료") else "진행 중"}, []
 
 
 def save_consultation_activity(consultation_id: int, activity: dict[str, Any]) -> int:

@@ -10,7 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from services.contract_service import CONTRACT_ACTIVITY_STAGES, validate_contract, validate_contract_activity
 from storage.contract_repository import add_contract_activity
+from storage.consultation_repository import get_consultations
 from storage.database import get_connection, initialize_database
+from ui.consultation_management import _focus_badge
 
 
 def run() -> None:
@@ -63,6 +65,9 @@ def run() -> None:
             assert contract["contract_status"] == "계약 진행"
             assert tuple(listing) == ("계약 진행 중", None)
             assert tuple(consultation) == ("진행 중", "계약 진행")
+            consultation_row = next(item for item in get_consultations(path=database_path) if item["consultation_id"] == consultation_id)
+            assert consultation_row["has_active_linked_contract"] == 1
+            assert _focus_badge(consultation_row, __import__("datetime").date(2026, 8, 28)) == "-"
         finally:
             connection.close()
 

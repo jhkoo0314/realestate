@@ -40,7 +40,8 @@ def get_consultations(*, query: str = "", categories: list[str] | None = None, s
     connection = get_connection(path)
     try:
         rows = connection.execute(f"""
-            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_source, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.desired_available_from_date, c.next_contact_date, c.consultation_status, c.progress_stage, c.last_contacted_date, c.latest_visit_result, c.closed_reason, c.desired_room_types, c.required_features_note, c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number, l.received_date, l.listing_status
+            SELECT c.id AS consultation_id, c.listing_id, c.consultation_category, c.customer_name, c.customer_phone, c.consulted_date, c.consultation_type, c.consultation_source, c.consultation_note, c.desired_area, c.desired_room_type, c.desired_deposit_manwon, c.desired_monthly_rent_manwon, c.desired_available_from_date, c.next_contact_date, c.consultation_status, c.progress_stage, c.last_contacted_date, c.latest_visit_result, c.closed_reason, c.desired_room_types, c.required_features_note, c.created_at, c.updated_at, b.building_name, b.lot_address, u.unit_number, l.received_date, l.listing_status,
+                   EXISTS(SELECT 1 FROM contracts active_contract WHERE active_contract.source_consultation_id = c.id AND active_contract.contract_status IN ('계약 진행', '잔금 예정', '계약 완료')) AS has_active_linked_contract
             FROM consultations c LEFT JOIN listings l ON l.id = c.listing_id LEFT JOIN units u ON u.id = l.unit_id LEFT JOIN buildings b ON b.id = u.building_id
             WHERE {' AND '.join(conditions)} ORDER BY c.consulted_date DESC, c.id DESC
         """, parameters).fetchall()

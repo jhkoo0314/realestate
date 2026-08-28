@@ -39,7 +39,9 @@ def run() -> None:
         detail = get_consultation_detail(consultation_id, database_path)
         assert detail and detail["desired_room_types"] == "원룸 | 투룸" and detail["closed_reason"] is None
 
-        activity, errors = validate_consultation_activity({"activity_date": "2026-08-22", "activity_type": "전화", "stage_after_activity": "종료", "closed_reason": None})
+        _, errors = validate_consultation_activity({"activity_date": "2026-08-22", "activity_type": "전화", "stage_after_activity": "종료", "closed_reason": None})
+        assert "상담 종료 사유를 선택해 주세요." in errors
+        activity, errors = validate_consultation_activity({"activity_date": "2026-08-22", "activity_type": "전화", "stage_after_activity": "종료", "closed_reason": "기타"})
         assert not errors and activity is not None
 
         cost, errors = validate_monthly_advertising_cost({"year_month": "2026-08-01", "channel_choice": "당근", "monthly_cost_manwon": 100, "memo": "검증"})
