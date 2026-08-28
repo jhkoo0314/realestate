@@ -12,15 +12,18 @@ from services.backup_service import create_daily_backup
 CONTRACT_TYPES = ["일반 계약", "단기계약", "확인 필요"]
 BROKERAGE_METHODS = ["단독중개", "공동중개", "확인 필요"]
 CONTRACT_STATUSES = ["계약 예정", "계약 진행", "잔금 예정", "계약 완료", "해지", "만료", "확인 필요"]
-CONTRACT_ACTIVITY_STAGES = ["가계약", "정식계약", "잔금 예정", "계약 완료", "해지"]
-LEGACY_CONTRACT_ACTIVITY_STAGES = ["계약금 수령", "잔금", "입주", "기타"]
+CONTRACT_ACTIVITY_STAGES = ["가계약", "정식계약", "잔금 완료", "계약 완료", "해지"]
+LEGACY_CONTRACT_ACTIVITY_STAGES = ["잔금 예정", "계약금 수령", "잔금", "입주", "기타"]
 CONTRACT_ACTIVITY_DEFAULT_STATUSES = {
     "가계약": "계약 진행",
     "정식계약": "계약 진행",
-    "잔금 예정": "잔금 예정",
+    # 잔금을 먼저 처리해도 정식계약이 끝났다는 뜻은 아니다.
+    # 계약·매물 종료는 사용자가 이력에서 `계약 완료`를 선택할 때만 반영한다.
+    "잔금 완료": "계약 진행",
     "계약 완료": "계약 완료",
     "해지": "해지",
     # 과거 저장 이력은 표시·수정 시 의미를 보존한다. 새 입력 메뉴에는 보이지 않는다.
+    "잔금 예정": "잔금 예정",
     "계약금 수령": "계약 진행",
     "잔금": "계약 완료",
     "입주": "계약 완료",
@@ -68,8 +71,6 @@ def validate_contract(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[
         errors.append("계약금 추가 수령 예정일은 계약 진행 시작일보다 빠를 수 없습니다.")
     if progress and balance_due_date and balance_due_date < progress:
         errors.append("잔금 예정일은 계약 진행 시작일보다 빠를 수 없습니다.")
-    if formal and balance_due_date and balance_due_date < formal:
-        errors.append("잔금 예정일은 정식 계약일보다 빠를 수 없습니다.")
     if start and end and end < start:
         errors.append("계약 종료일은 시작일보다 빠를 수 없습니다.")
     if term is not None and term <= 0:

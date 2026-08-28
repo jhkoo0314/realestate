@@ -109,7 +109,7 @@ def _render_contract_activities(selected: dict) -> None:
     """현재 계약 단계를 이력으로 누적하고 계약 상태에 자동 반영한다."""
     contract_id = selected["contract_id"]
     st.markdown("##### 계약 단계 이력")
-    st.caption("가계약·정식계약·잔금 예정·계약 완료·해지 중 현재 계약 단계를 기록합니다. 선택한 단계는 이력으로 남고 계약 상태에 자동 반영됩니다.")
+    st.caption("가계약·정식계약·잔금 완료·계약 완료·해지 중 실제 처리된 현재 계약 단계를 기록합니다. 미래 잔금 일정은 위 계약 정보의 잔금 예정일에 입력하세요. 선택한 단계는 이력으로 남고 계약 상태에 자동 반영됩니다.")
     activities = get_contract_activities(contract_id)
     if activities:
         st.dataframe(
