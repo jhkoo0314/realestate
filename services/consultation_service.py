@@ -9,7 +9,7 @@ from storage.consultation_repository import add_consultation_activity, close_leg
 from services.backup_service import create_daily_backup
 
 
-CONSULTATION_TYPES = ["전화", "문자", "방문", "기타"]
+CONSULTATION_TYPES = ["전화", "문자", "방문", "계약", "기타"]
 CONSULTATION_STATUSES = ["진행 중", "보류", "종료", "확인 필요"]
 CONSULTATION_CATEGORIES = ["매물 상담", "일반 상담"]
 CONSULTATION_SOURCES = ["미입력", "직방", "다방", "당근", "네이버", "워크인", "타부동산 연계"]

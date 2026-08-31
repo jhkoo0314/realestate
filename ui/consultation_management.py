@@ -9,8 +9,8 @@ import streamlit as st
 from services.contact_format import format_phone_number
 from services.consultation_service import CLOSED_REASONS, CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, DESIRED_AREA_OPTIONS, DESIRED_ROOM_TYPE_OPTIONS, PROGRESS_STAGES, VISIT_RESULTS, close_legacy_consultation, delete_consultation, delete_consultation_activity, link_consultation_to_listing, save_consultation, save_consultation_activity, save_consultation_activity_changes, save_consultation_changes, validate_consultation, validate_consultation_activity
 from services.export_service import create_consultation_excel, make_management_export_filename
-from services.record_number import consultation_number, listing_number
-from storage.consultation_repository import get_consultation_activities, get_consultation_delete_counts, get_consultation_detail, get_consultations
+from services.record_number import consultation_number, contract_number, listing_number
+from storage.consultation_repository import get_consultation_activities, get_consultation_delete_counts, get_consultation_detail, get_consultations, get_successful_contract_for_consultation
 from storage.listing_repository import search_listing_rounds
 
 
@@ -36,7 +36,9 @@ def _is_closing_stage(stage: str | None) -> bool:
 
 
 def _stage_label(stage: str) -> str:
-    return "상담 종료" if stage == "종료" else stage
+    if stage == "종료":
+        return "상담 종료"
+    return "계약 성사" if stage == "계약 완료" else stage
 
 
 def _split_standard_value(value: str | None, options: list[str]) -> tuple[list[str], str]:
@@ -74,7 +76,7 @@ def _task_text(item: dict, today: str) -> str:
     tasks: list[str] = []
     if item["consultation_status"] == "확인 필요":
         tasks.append("상담 확인 필요")
-    if item["next_contact_date"] and item["next_contact_date"] <= today and item["consultation_status"] != "종료":
+    if item["next_contact_date"] and item["next_contact_date"] <= today and item["consultation_status"] != "종료" and not item.get("has_active_linked_contract"):
         tasks.append("다음 연락 필요")
     return " · ".join(tasks) or "-"
 
@@ -103,7 +105,8 @@ def _rows(items: list[dict]) -> list[dict]:
     return [{
         "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "지번주소": item["lot_address"] or "-", "호실": item["unit_number"] or "-",
         "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"], "유입 경로": item["consultation_source"] or "-",
-        "진행 단계": item["progress_stage"] or "기존 기록", "최근 상담일": item["last_contacted_date"] or item["consulted_date"], "종료 사유": item["closed_reason"] or "-", "상담 상태": item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
+        "진행 단계": "계약 성사" if item.get("has_active_linked_contract") else (item["progress_stage"] or "기존 기록"), "최근 상담일": item["last_contacted_date"] or item["consulted_date"], "종료 사유": item["closed_reason"] or "-", "상담 상태": "계약 성사" if item.get("has_active_linked_contract") else item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
+        "계약 성사": "계약 성사" if item.get("has_active_linked_contract") else "-",
         "해야 할 일": _task_text(item, today), "집중 대응": _focus_badge(item, date.today()),
         "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_types"] or item["desired_room_type"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None, f"입주 가능일 {item['desired_available_from_date']}" if item.get("desired_available_from_date") else None])) or "-", "상담 내용": item["consultation_note"],
     } for item in items]
@@ -231,24 +234,21 @@ def _render_registration() -> None:
 def _render_lookup() -> None:
     st.markdown("#### 상담 조회·수정")
     with st.form("consultation_search_form"):
-        query_column, category_column, status_column, stage_column = st.columns([2, 1, 1, 1])
-        with query_column:
-            query = st.text_input("상담번호·매물번호·건물명·지번·호수·희망 지역 검색", key="consultation_query", placeholder="예: S-000078 또는 M-000150")
-        with category_column:
+        query = st.text_input("상담번호·매물번호·건물명·지번·호수·희망 지역 검색", key="consultation_query", placeholder="예: S-000078 또는 M-000150")
+        first_row = st.columns(3)
+        with first_row[0]:
             categories = st.multiselect("상담 구분", CONSULTATION_CATEGORIES, key="consultation_category_filter")
-        with status_column:
+        with first_row[1]:
             statuses = st.multiselect("상담 상태", CONSULTATION_STATUSES, key="consultation_status_filter")
-        with stage_column:
+        with first_row[2]:
             progress_stages = st.multiselect("진행 단계", PROGRESS_STAGES, key="consultation_stage_filter")
-        start_column, end_column, due_column, reason_column = st.columns([1, 1, 2, 1])
-        with start_column:
+        second_row = st.columns(3)
+        with second_row[0]:
             consulted_start = st.date_input("상담일 시작", value=None, key="consultation_start")
-        with end_column:
+        with second_row[1]:
             consulted_end = st.date_input("상담일 종료", value=None, key="consultation_end")
-        with due_column:
+        with second_row[2]:
             due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
-        with reason_column:
-            closed_reasons = st.multiselect("종료 사유", CLOSED_REASONS, key="consultation_closed_reason_filter")
         searched = st.form_submit_button("상담 조회", type="primary")
     if searched:
         st.session_state["consultation_has_searched"] = True
@@ -261,7 +261,6 @@ def _render_lookup() -> None:
         categories=categories,
         statuses=statuses,
         progress_stages=progress_stages,
-        closed_reasons=closed_reasons,
         consulted_start=_date_text(consulted_start),
         consulted_end=_date_text(consulted_end),
         due_only=due_only,
@@ -321,6 +320,29 @@ def _render_lookup() -> None:
     if st.button("상세·수정 닫기", key=f"consultation_edit_close_{detail['consultation_id']}"):
         st.session_state.pop("consultation_edit_target_id", None)
         st.rerun()
+    successful_contract = get_successful_contract_for_consultation(detail["consultation_id"])
+    if successful_contract:
+        unit = successful_contract["unit_number"] if successful_contract["unit_number"].endswith("호") else f"{successful_contract['unit_number']}호"
+        contract_date = successful_contract["formal_contract_date"] or successful_contract["contract_progress_date"] or "미입력"
+        st.success("계약 성사")
+        card_left, card_middle, card_right = st.columns(3)
+        with card_left:
+            st.caption(f"계약 상태: {successful_contract['contract_status']}\n\n계약일: {contract_date}")
+        with card_middle:
+            st.caption(f"계약매물: {successful_contract['building_name']} {unit}\n\n지역: {successful_contract['lot_address']}")
+        with card_right:
+            st.caption(f"중개방식: {successful_contract['brokerage_method'] or '확인 필요'}")
+            if st.button("계약 상세보기", key=f"consultation_contract_open_{successful_contract['contract_id']}"):
+                st.session_state["requested_page"] = "계약관리"
+                st.session_state["contract_management_mode"] = "계약 조회·수정"
+                st.session_state["contract_has_searched"] = True
+                st.session_state["contract_edit_target_id"] = successful_contract["contract_id"]
+                for key, value in {
+                    "contract_query": "", "contract_status_filter": [], "contract_end_start": None,
+                    "contract_end_end": None, "contract_expiring_soon": False,
+                }.items():
+                    st.session_state[key] = value
+                st.rerun()
     if st.button("이 상담으로 계약 등록", key=f"consultation_to_contract_{detail['consultation_id']}", type="primary"):
         # 상단 메뉴 위젯이 생성된 뒤에는 해당 위젯 값을 직접 바꿀 수 없다.
         # 다음 재실행 시작 시 app.py가 이 요청을 적용한다.
@@ -521,7 +543,7 @@ def _render_lookup() -> None:
 
 def render_consultation_management() -> None:
     st.subheader("상담관리")
-    st.markdown("<p class='section-note'>상담 단계는 계약 전까지 관리합니다. 계약 진행·완료와 계약 단계 이력은 계약관리에서 처리하며, 고객 연락처는 상담 상세에서만 확인합니다.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='section-note'>상담 단계는 계약 전까지 관리합니다. 연결 계약이 계약 진행·잔금 예정·계약 완료이면 상담은 계약 성사로 표시하며, 계약 단계 이력은 계약관리에서 처리합니다.</p>", unsafe_allow_html=True)
     mode = st.radio("상담관리 메뉴", ["상담 등록", "상담 조회·수정"], horizontal=True, key="consultation_management_mode")
     if mode == "상담 등록":
         _render_registration()

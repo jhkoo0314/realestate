@@ -65,7 +65,7 @@ def get_today_tasks(reference_date: date, path=DATABASE_PATH) -> dict[str, list[
                 result["오늘"].append(_row("매물", "퇴실 예정", move_out_due_date, listing, listing["listing_status"], "오늘"))
     for consultation in get_consultations(path=path):
         due_date = consultation.get("next_contact_date")
-        if due_date and due_date <= today_text and consultation["consultation_status"] != "종료":
+        if due_date and due_date <= today_text and consultation["consultation_status"] != "종료" and not consultation.get("has_active_linked_contract"):
             bucket = "오늘" if due_date == today_text else "지연"
             result[bucket].append(_row("상담", "다음 연락", due_date, consultation, consultation["consultation_status"], bucket))
 

@@ -64,7 +64,7 @@ def run() -> None:
             assert tuple(saved_activity) == ("잔금 완료", "계약 진행")
             assert contract["contract_status"] == "계약 진행"
             assert tuple(listing) == ("계약 진행 중", None)
-            assert tuple(consultation) == ("진행 중", "계약 진행", None)
+            assert tuple(consultation) == ("종료", "계약 완료", "계약완료")
             consultation_row = next(item for item in get_consultations(path=database_path) if item["consultation_id"] == consultation_id)
             assert consultation_row["has_active_linked_contract"] == 1
             assert _focus_badge(consultation_row, __import__("datetime").date(2026, 8, 28)) == "-"

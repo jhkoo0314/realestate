@@ -246,7 +246,7 @@ def _render_status_change(selected: dict) -> None:
     with balance_middle:
         balance_due = st.date_input("잔금 예정일", value=date.fromisoformat(selected["balance_due_date"]) if selected["balance_due_date"] else None, key=f"contract_balance_due_{selected['contract_id']}")
     note = st.text_area("계약 메모", value=selected["contract_note"] or "", key=f"contract_note_{selected['contract_id']}")
-    sync_source = st.checkbox("현재 계약 상태를 연결 상담에 반영", value=False, key=f"contract_source_sync_{selected['contract_id']}", help="기존 계약에 상담을 새로 연결한 경우에만 필요할 때 선택하세요.")
+    st.caption("연결 상담은 계약 진행·잔금 예정·계약 완료 상태로 저장하면 자동으로 계약 성사 처리됩니다.")
     if st.button("계약 정보 저장", key=f"contract_status_save_{selected['contract_id']}"):
         try:
             change_contract_details(selected["contract_id"], {
@@ -254,7 +254,7 @@ def _render_status_change(selected: dict) -> None:
                 "contract_progress_date": progress_date, "formal_contract_date": formal_date,
                 "contract_start_date": start_date, "contract_end_date": end_date, "term_months": term_months,
                 "contract_note": note, "contractor_name": contractor_name, "contractor_contact": contact,
-                "source_consultation_id": st.session_state[source_key], "sync_source_consultation": sync_source,
+                "source_consultation_id": st.session_state[source_key],
                 "contract_deposit_manwon": deposit, "provisional_deposit_manwon": provisional_deposit,
                 "remaining_deposit_due_date": remaining_deposit_due, "balance_manwon": balance,
                 "balance_due_date": balance_due,

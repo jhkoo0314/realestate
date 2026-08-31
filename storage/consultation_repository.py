@@ -22,6 +22,14 @@ def get_consultations(*, query: str = "", categories: list[str] | None = None, s
     if statuses:
         conditions.append(f"c.consultation_status IN ({', '.join('?' for _ in statuses)})")
         parameters.extend(statuses)
+        if "진행 중" in statuses:
+            conditions.append(
+                """NOT (c.consultation_status = '진행 중' AND EXISTS(
+                    SELECT 1 FROM contracts successful_contract
+                    WHERE successful_contract.source_consultation_id = c.id
+                      AND successful_contract.contract_status IN ('계약 진행', '잔금 예정', '계약 완료')
+                ))"""
+            )
     if progress_stages:
         conditions.append(f"c.progress_stage IN ({', '.join('?' for _ in progress_stages)})")
         parameters.extend(progress_stages)
@@ -57,6 +65,28 @@ def get_consultation_detail(consultation_id: int, path: Path = DATABASE_PATH) ->
             FROM consultations c LEFT JOIN listings l ON l.id = c.listing_id LEFT JOIN units u ON u.id = l.unit_id LEFT JOIN buildings b ON b.id = u.building_id
             WHERE c.id = ? AND (c.listing_id IS NULL OR (b.is_active = 1 AND u.is_active = 1))
         """, (consultation_id,)).fetchone()
+        return dict(row) if row else None
+    finally: connection.close()
+
+
+def get_successful_contract_for_consultation(consultation_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
+    """상담에 연결된 성사 계약의 표시용 정보만 계약 테이블에서 읽는다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        row = connection.execute(
+            """SELECT c.id AS contract_id, c.contract_status, c.contract_progress_date,
+                      c.formal_contract_date, c.brokerage_method, b.building_name,
+                      b.lot_address, u.unit_number
+               FROM contracts c
+               JOIN listings l ON l.id=c.listing_id
+               JOIN units u ON u.id=l.unit_id
+               JOIN buildings b ON b.id=u.building_id
+               WHERE c.source_consultation_id=?
+                 AND c.contract_status IN ('계약 진행', '잔금 예정', '계약 완료')
+               ORDER BY COALESCE(c.formal_contract_date, c.contract_progress_date, c.created_at) DESC, c.id DESC
+               LIMIT 1""",
+            (consultation_id,),
+        ).fetchone()
         return dict(row) if row else None
     finally: connection.close()
 
@@ -153,6 +183,21 @@ def add_consultation_activity(consultation_id: int, activity: dict[str, Any], pa
 
 def _refresh_consultation_activity_summary(connection: Any, consultation_id: int) -> None:
     """남아 있는 가장 최근 후속 이력으로 상담 요약값을 맞춘다."""
+    if connection.execute(
+        """SELECT 1 FROM contracts
+           WHERE source_consultation_id=?
+             AND contract_status IN ('계약 진행', '잔금 예정', '계약 완료')
+           LIMIT 1""",
+        (consultation_id,),
+    ).fetchone():
+        connection.execute(
+            """UPDATE consultations
+               SET progress_stage='계약 완료', consultation_status='종료', closed_reason='계약완료',
+                   next_contact_date=NULL
+               WHERE id=?""",
+            (consultation_id,),
+        )
+        return
     latest = connection.execute(
         """SELECT activity_date, stage_after_activity, visit_result, closed_reason, next_contact_date
            FROM consultation_activities

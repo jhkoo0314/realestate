@@ -10,6 +10,10 @@ from storage.database import DATABASE_PATH, ensure_database_schema, get_connecti
 from services.record_number import record_id_from_query
 
 
+SUCCESSFUL_CONTRACT_STATUSES = ("계약 진행", "잔금 예정", "계약 완료")
+AUTO_CONTRACT_CONSULTATION_NOTE = "연결된 계약이 생성되어 상담이 자동으로 계약 성사 처리되었습니다."
+
+
 def _apply_linked_listing_status(connection, listing_id: int, contract_status: str) -> None:
     """계약 상태가 바뀔 때만 연결 매물의 현재 상태를 안전하게 반영한다."""
     if contract_status in ("계약 진행", "잔금 예정"):
@@ -21,28 +25,42 @@ def _apply_linked_listing_status(connection, listing_id: int, contract_status: s
 
 
 def _sync_linked_consultation(connection, contract_id: int, contract_status: str) -> None:
-    """계약 상태를 출처 상담에만 반영한다. 해지·만료는 상담을 자동 재개하지 않는다."""
-    contract = connection.execute("SELECT source_consultation_id FROM contracts WHERE id=?", (contract_id,)).fetchone()
+    """성사 계약을 출처 상담에 한 번만 반영한다. 해지·만료는 상담을 자동 재개하지 않는다."""
+    if contract_status not in SUCCESSFUL_CONTRACT_STATUSES:
+        return
+    contract = connection.execute(
+        """SELECT source_consultation_id, contract_progress_date, formal_contract_date
+           FROM contracts WHERE id=?""",
+        (contract_id,),
+    ).fetchone()
     if contract is None or contract["source_consultation_id"] is None:
         return
     consultation_id = contract["source_consultation_id"]
-    if contract_status in ("계약 진행", "잔금 예정"):
+    if connection.execute("SELECT 1 FROM consultations WHERE id=?", (consultation_id,)).fetchone() is None:
+        raise ValueError("연결한 상담 기록을 찾을 수 없습니다. 계약 저장을 취소했습니다.")
+    connection.execute(
+        """UPDATE consultations
+           SET consultation_status='종료', progress_stage='계약 완료', closed_reason='계약완료',
+               next_contact_date=NULL
+           WHERE id=?""",
+        (consultation_id,),
+    )
+    already_recorded = connection.execute(
+        """SELECT 1 FROM consultation_activities
+           WHERE consultation_id=? AND activity_type='계약' AND stage_after_activity='계약 완료'
+             AND activity_note=?
+           LIMIT 1""",
+        (consultation_id, AUTO_CONTRACT_CONSULTATION_NOTE),
+    ).fetchone()
+    if already_recorded is None:
+        activity_date = contract["formal_contract_date"] or contract["contract_progress_date"] or date.today().isoformat()
         connection.execute(
-            "UPDATE consultations SET progress_stage='계약 진행', consultation_status='진행 중', closed_reason=NULL WHERE id=?",
-            (consultation_id,),
+            """INSERT INTO consultation_activities
+               (consultation_id, activity_date, activity_type, activity_note, stage_after_activity,
+                closed_reason, next_contact_date)
+               VALUES (?, ?, '계약', ?, '계약 완료', '계약완료', NULL)""",
+            (consultation_id, activity_date, AUTO_CONTRACT_CONSULTATION_NOTE),
         )
-    elif contract_status == "계약 완료":
-        other_active = connection.execute(
-            """SELECT 1 FROM contracts
-               WHERE source_consultation_id=? AND id<>? AND contract_status IN ('계약 진행', '잔금 예정')
-               LIMIT 1""",
-            (consultation_id, contract_id),
-        ).fetchone()
-        if other_active is None:
-            connection.execute(
-                "UPDATE consultations SET progress_stage='계약 완료', consultation_status='종료', next_contact_date=NULL WHERE id=?",
-                (consultation_id,),
-            )
 
 
 def get_contracts(*, query: str = "", statuses: list[str] | None = None, end_start: str | None = None, end_end: str | None = None, expiring_within_days: int | None = None, unit_id: int | None = None, path: Path = DATABASE_PATH) -> list[dict[str, Any]]:
@@ -109,8 +127,7 @@ def update_contract_details(contract_id: int, values: dict[str, Any], path: Path
                 raise ValueError("연결할 상담 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
             connection.execute("""UPDATE contracts SET source_consultation_id=?, contract_type=?, brokerage_method=?, contract_progress_date=?, formal_contract_date=?, contract_start_date=?, contract_end_date=?, term_months=?, contract_status=?, contract_note=?, contractor_name=?, contractor_contact=?, contract_deposit_manwon=?, provisional_deposit_manwon=?, remaining_deposit_due_date=?, balance_manwon=?, balance_due_date=? WHERE id=?""", (source_consultation_id, values.get("contract_type", current["contract_type"]), values.get("brokerage_method", current["brokerage_method"]), values.get("contract_progress_date", current["contract_progress_date"]), values.get("formal_contract_date", current["formal_contract_date"]), values.get("contract_start_date", current["contract_start_date"]), values.get("contract_end_date", current["contract_end_date"]), values.get("term_months", current["term_months"]), contract_status, values.get("contract_note", current["contract_note"]), values.get("contractor_name", current["contractor_name"]), values.get("contractor_contact", current["contractor_contact"]), values.get("contract_deposit_manwon", current["contract_deposit_manwon"]), values.get("provisional_deposit_manwon", current["provisional_deposit_manwon"]), values.get("remaining_deposit_due_date", current["remaining_deposit_due_date"]), values.get("balance_manwon", current["balance_manwon"]), values.get("balance_due_date", current["balance_due_date"]), contract_id))
             _apply_linked_listing_status(connection, current["listing_id"], contract_status)
-            if values.get("sync_source_consultation") or "contract_status" in values and contract_status != current["contract_status"]:
-                _sync_linked_consultation(connection, contract_id, contract_status)
+            _sync_linked_consultation(connection, contract_id, contract_status)
     finally: connection.close()
 
 
@@ -193,4 +210,36 @@ def delete_contract_activity(activity_id: int, contract_id: int, path: Path = DA
             if connection.execute("DELETE FROM contract_activities WHERE id=? AND contract_id=?", (activity_id, contract_id)).rowcount != 1:
                 raise ValueError("삭제할 계약 단계 이력을 찾을 수 없습니다.")
             _refresh_contract_activity_summary(connection, contract_id)
+    finally: connection.close()
+
+
+def repair_successful_contract_consultations(path: Path = DATABASE_PATH) -> dict[str, int]:
+    """기존 성사 계약의 출처 상담을 같은 규칙으로 보정한다. 별도 백업 뒤 한 번 실행한다."""
+    ensure_database_schema(path); connection = get_connection(path)
+    try:
+        with connection:
+            rows = connection.execute(
+                """SELECT id, source_consultation_id, contract_status,
+                          contract_progress_date, formal_contract_date
+                   FROM contracts
+                   WHERE source_consultation_id IS NOT NULL
+                     AND contract_status IN ('계약 진행', '잔금 예정', '계약 완료')"""
+            ).fetchall()
+            changed_consultations: set[int] = set()
+            for row in rows:
+                before = connection.execute(
+                    """SELECT consultation_status, progress_stage, closed_reason, next_contact_date
+                       FROM consultations WHERE id=?""",
+                    (row["source_consultation_id"],),
+                ).fetchone()
+                _sync_linked_consultation(connection, row["id"], row["contract_status"])
+                if before is not None and tuple(before) != ("종료", "계약 완료", "계약완료", None):
+                    changed_consultations.add(row["source_consultation_id"])
+            activity_count = connection.execute(
+                """SELECT COUNT(*) FROM consultation_activities
+                   WHERE activity_type='계약' AND stage_after_activity='계약 완료'
+                     AND activity_note=?""",
+                (AUTO_CONTRACT_CONSULTATION_NOTE,),
+            ).fetchone()[0]
+            return {"eligible_contracts": len(rows), "changed_consultations": len(changed_consultations), "auto_activities": activity_count}
     finally: connection.close()
