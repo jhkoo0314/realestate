@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from services.advertisement_cost_service import validate_monthly_advertising_cost
+from services.advertisement_copy_service import generate_lead_ad_copy
 from services.consultation_service import validate_consultation, validate_consultation_activity
 from storage.advertisement_cost_repository import get_monthly_advertising_costs, save_monthly_advertising_cost
 from storage.consultation_repository import create_consultation, get_consultation_detail
@@ -49,6 +50,15 @@ def run() -> None:
         save_monthly_advertising_cost(cost, database_path)
         saved_cost = next(item for item in get_monthly_advertising_costs(path=database_path) if item["year_month"] == "2026-08" and item["advertising_channel"] == "당근")
         assert saved_cost["monthly_cost_manwon"] == 100
+
+    copy = generate_lead_ad_copy(
+        location="장재리 1684", room_type="원룸", title_template="", transaction_type="월세",
+        deposit=500, rent=40, management_fee=8, available_date="즉시 가능",
+        property_condition="신축급", positioning_type="컨디션", special_point="", option_text="",
+        include_actual_listing_notice=False, include_actual_photo_notice=False,
+    )
+    assert "💡 이 매물의 포인트" in copy["body"]
+    assert "① 이 매물의 포인트" not in copy["body"]
 
 
 if __name__ == "__main__":

@@ -60,11 +60,11 @@ def run() -> None:
             saved_activity = connection.execute("SELECT activity_stage, contract_status_after FROM contract_activities WHERE contract_id=?", (contract_id,)).fetchone()
             contract = connection.execute("SELECT contract_status FROM contracts WHERE id=?", (contract_id,)).fetchone()
             listing = connection.execute("SELECT listing_status, close_reason FROM listings WHERE id=?", (listing_id,)).fetchone()
-            consultation = connection.execute("SELECT consultation_status, progress_stage FROM consultations WHERE id=?", (consultation_id,)).fetchone()
+            consultation = connection.execute("SELECT consultation_status, progress_stage, closed_reason FROM consultations WHERE id=?", (consultation_id,)).fetchone()
             assert tuple(saved_activity) == ("잔금 완료", "계약 진행")
             assert contract["contract_status"] == "계약 진행"
             assert tuple(listing) == ("계약 진행 중", None)
-            assert tuple(consultation) == ("진행 중", "계약 진행")
+            assert tuple(consultation) == ("진행 중", "계약 진행", None)
             consultation_row = next(item for item in get_consultations(path=database_path) if item["consultation_id"] == consultation_id)
             assert consultation_row["has_active_linked_contract"] == 1
             assert _focus_badge(consultation_row, __import__("datetime").date(2026, 8, 28)) == "-"

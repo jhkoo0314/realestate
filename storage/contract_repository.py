@@ -28,7 +28,7 @@ def _sync_linked_consultation(connection, contract_id: int, contract_status: str
     consultation_id = contract["source_consultation_id"]
     if contract_status in ("계약 진행", "잔금 예정"):
         connection.execute(
-            "UPDATE consultations SET progress_stage='계약 진행', consultation_status='진행 중' WHERE id=?",
+            "UPDATE consultations SET progress_stage='계약 진행', consultation_status='진행 중', closed_reason=NULL WHERE id=?",
             (consultation_id,),
         )
     elif contract_status == "계약 완료":

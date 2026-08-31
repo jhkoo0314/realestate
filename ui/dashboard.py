@@ -100,7 +100,6 @@ def _summary(listings: list[dict]) -> dict[str, int]:
         "오늘 새 접수": sum(item["received_date"] == today_text for item in listings),
         "퇴실 예정": sum(item["listing_status"] == "퇴실 예정" for item in listings),
         "재확인 관리": due_or_overdue + upcoming_within_seven_days,
-        "사진 촬영 필요": sum("사진 촬영 필요" in item["tasks"] for item in listings),
         "공실": sum(item["listing_status"] == "공실" for item in listings),
     }
 
@@ -278,7 +277,7 @@ def render_dashboard(go_to_listing) -> None:
 
     metrics = _summary(all_listings)
     recheck_due_or_overdue, recheck_upcoming = _recheck_management_counts(all_listings)
-    metric_columns = st.columns(5)
+    metric_columns = st.columns(4)
     for column, (label, value) in zip(metric_columns, metrics.items()):
         column.metric(label, value)
         if label == "재확인 관리":

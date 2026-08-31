@@ -477,7 +477,7 @@ def generate_lead_ad_copy(
         "",
         positioning["headline"].format(room_type=room_type),
         "",
-        "① 이 매물의 포인트",
+        "💡 이 매물의 포인트",
     ]
     lines.extend(f"• {point}" for point in positioning_points)
     lines.extend(["", "💰 조건"])
