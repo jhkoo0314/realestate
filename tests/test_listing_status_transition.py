@@ -13,7 +13,7 @@ from storage.database import get_connection, initialize_database
 from storage.listing_repository import mark_past_due_move_out_listings_vacant
 
 
-def _add_listing(connection, *, status: str, availability: str, available_from: str | None, move_out_due: str | None) -> int:
+def _add_listing(connection, *, status: str, availability: str, move_out_due: str | None) -> int:
     building_id = connection.execute(
         "INSERT INTO buildings (building_name, lot_address) VALUES (?, ?)",
         ("자동전환 확인", f"북수리 {1000 + connection.total_changes}"),
@@ -24,9 +24,9 @@ def _add_listing(connection, *, status: str, availability: str, available_from: 
     ).lastrowid
     return connection.execute(
         """INSERT INTO listings
-           (unit_id, received_date, listing_status, availability_type, available_from_date, move_out_due_date)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (unit_id, "2026-08-20", status, availability, available_from, move_out_due),
+           (unit_id, received_date, listing_status, availability_type, move_out_due_date)
+           VALUES (?, ?, ?, ?, ?)""",
+        (unit_id, "2026-08-20", status, availability, move_out_due),
     ).lastrowid
 
 
@@ -40,21 +40,18 @@ def run() -> None:
                 connection,
                 status="퇴실 예정",
                 availability="퇴실 후 협의",
-                available_from="2026-08-23",
                 move_out_due="2026-08-23",
             )
             legacy_listing_id = _add_listing(
                 connection,
                 status="공실",
                 availability="퇴실 후 협의",
-                available_from=None,
                 move_out_due="2026-08-23",
             )
             today_listing_id = _add_listing(
                 connection,
                 status="퇴실 예정",
                 availability="퇴실 후 협의",
-                available_from=None,
                 move_out_due="2026-08-24",
             )
             connection.commit()
@@ -66,10 +63,10 @@ def run() -> None:
         try:
             for listing_id in (due_listing_id, legacy_listing_id):
                 row = connection.execute(
-                    "SELECT listing_status, availability_type, available_from_date, move_out_due_date FROM listings WHERE id=?",
+                    "SELECT listing_status, availability_type, move_out_due_date FROM listings WHERE id=?",
                     (listing_id,),
                 ).fetchone()
-                assert tuple(row) == ("공실", "즉시입주", None, None)
+                assert tuple(row) == ("공실", "즉시입주", None)
             today_row = connection.execute(
                 "SELECT listing_status, availability_type, move_out_due_date FROM listings WHERE id=?",
                 (today_listing_id,),

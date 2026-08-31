@@ -18,7 +18,7 @@ from services.lot_address_service import combine_lot_address
 LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능", "계약 진행 중", "보류"]
 UNKNOWN_BUILDING_NAME = "건물명 미입력"
 ROOM_TYPES = ["원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
-AVAILABILITY_TYPES = ["즉시입주", "날짜 지정", "퇴실 후 협의", "확인 필요"]
+AVAILABILITY_TYPES = ["즉시입주", "퇴실 후 협의", "확인 필요"]
 LISTING_HOLDERS = ["크린주택관리", "삼성주택관리", "한빛주택관리", "국제주택관리", "개인매물", "직접입력"]
 
 
@@ -57,7 +57,6 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
     deposit = raw.get("deposit_manwon")
     rent = raw.get("monthly_rent_manwon")
     availability_type = raw.get("availability_type")
-    available_from_date = raw.get("available_from_date")
     listing_holder, holder_error = _listing_holder(raw, required=True)
 
     if lot_area or lot_number:
@@ -73,8 +72,6 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
         errors.append("보증금을 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
     if rent is not None and rent <= 0:
         errors.append("월세를 입력할 때는 0보다 큰 숫자를 입력해 주세요.")
-    if availability_type == "날짜 지정" and not available_from_date:
-        errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
     if holder_error:
         errors.append(holder_error)
 
@@ -85,8 +82,6 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
         "building": {
             "building_name": building_name,
             "lot_address": lot_address,
-            "admin_address": _clean_text(raw.get("admin_address")),
-            "road_address": _clean_text(raw.get("road_address")),
             "common_entrance_password": _clean_text(raw.get("common_entrance_password")),
             "has_elevator": raw.get("has_elevator"),
             "parking_status": raw.get("parking_status"),
@@ -96,11 +91,9 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "unit_number": unit_number,
             "floor_number": raw.get("floor_number"),
             "room_type": raw.get("room_type"),
-            "direction": raw.get("direction"),
             "unit_options": _clean_text(raw.get("unit_options")),
             "access_method": raw.get("access_method"),
             "unit_access_password": _clean_text(raw.get("unit_access_password")),
-            "unit_highlights": _clean_text(raw.get("unit_highlights")),
         },
         "listing": {
             "received_date": _date_text(raw.get("received_date")) or date.today().isoformat(),
@@ -109,12 +102,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "monthly_rent_manwon": int(rent) if rent is not None else None,
             "management_fee_manwon": raw.get("management_fee_manwon"),
             "availability_type": availability_type,
-            "available_from_date": _date_text(available_from_date),
             "move_out_due_date": _date_text(raw.get("move_out_due_date")),
-            "has_listing_photos": raw.get("has_listing_photos") or "확인 필요",
-            "cleaning_status": raw.get("cleaning_status"),
-            "wallpaper_status": raw.get("wallpaper_status"),
-            "repair_status": raw.get("repair_status"),
             "listing_holder": listing_holder,
             "listing_note": _clean_text(raw.get("listing_note")),
             "landlord_contact": _clean_text(raw.get("landlord_contact")),
@@ -163,7 +151,6 @@ def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = Tr
     errors: list[str] = []
     listing_status = raw.get("listing_status")
     availability_type = raw.get("availability_type")
-    available_from_date = raw.get("available_from_date")
     price_mode = raw.get("price_mode")
     deposit = raw.get("deposit_manwon")
     rent = raw.get("monthly_rent_manwon")
@@ -173,8 +160,6 @@ def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = Tr
         errors.append("매물 상태를 선택해 주세요.")
     if not availability_type:
         errors.append("입주 가능 유형을 선택해 주세요.")
-    if availability_type == "날짜 지정" and not available_from_date:
-        errors.append("입주 가능 유형이 날짜 지정이면 입주 가능일을 입력해 주세요.")
     if holder_error:
         errors.append(holder_error)
     if price_mode == "새 가격 입력":
@@ -186,9 +171,7 @@ def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = Tr
         return None, errors
 
     note = _clean_text(raw.get("listing_note"))
-    verification_note = None
     if price_mode == "가격 확인 필요":
-        verification_note = "보증금·월세 확인 필요"
         note = f"{note}\n가격 확인 필요" if note else "가격 확인 필요"
         deposit = None
         rent = None
@@ -200,18 +183,12 @@ def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = Tr
         "monthly_rent_manwon": int(rent) if rent is not None else None,
         "management_fee_manwon": raw.get("management_fee_manwon"),
         "availability_type": availability_type,
-        "available_from_date": _date_text(available_from_date),
         "move_out_due_date": _date_text(raw.get("move_out_due_date")),
-        "has_listing_photos": raw.get("has_listing_photos") or "확인 필요",
-        "cleaning_status": raw.get("cleaning_status"),
-        "wallpaper_status": raw.get("wallpaper_status"),
-        "repair_status": raw.get("repair_status"),
         "listing_holder": listing_holder,
         "listing_note": note,
         "landlord_contact": _clean_text(raw.get("landlord_contact")),
         "tenant_contact": _clean_text(raw.get("tenant_contact")),
         "next_check_date": _date_text(raw.get("next_check_date")),
-        "verification_note": verification_note,
     }, []
 
 
@@ -228,7 +205,6 @@ def validate_current_listing(raw: dict[str, Any]) -> tuple[dict[str, Any] | None
     listing, errors = validate_relisting(raw, require_listing_holder=False)
     if errors or listing is None:
         return listing, errors
-    listing["last_photo_date"] = _date_text(raw.get("last_photo_date"))
     listing["unit_options"] = _clean_text(raw.get("unit_options"))
     return listing, []
 
@@ -259,8 +235,6 @@ def listing_summary(payload: dict[str, dict[str, Any]]) -> str:
     listing = payload["listing"]
     unit_label = f"{unit['unit_number']}호" if not unit["unit_number"].endswith("호") else unit["unit_number"]
     availability = listing["availability_type"]
-    if availability == "날짜 지정":
-        availability = f"{listing['available_from_date']} 입주 가능"
     return (
         f"{building['building_name']} · {building['lot_address']} · {unit_label} · "
         f"{unit.get('room_type') or '형태 미입력'} · "

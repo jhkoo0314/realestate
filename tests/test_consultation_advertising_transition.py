@@ -30,9 +30,9 @@ def run() -> None:
             connection.close()
 
         consultation, errors = validate_consultation({
-            "consultation_category": "일반 상담", "consulted_date": "2026-08-22", "consultation_type": "전화",
+            "consulted_date": "2026-08-22",
             "consultation_source": "당근", "consultation_note": "미입력", "progress_stage": "종료",
-            "closed_reason": None, "desired_area": "북수리 | 기타: 배방역", "desired_room_type": "원룸",
+            "closed_reason": None, "desired_area": "북수리 | 기타: 배방역",
             "desired_room_types": "원룸 | 투룸",
         })
         assert not errors and consultation is not None

@@ -139,7 +139,7 @@ realestate/
 
 - [작업 계획](docs/TASK.md)
 - [현재 구현 진행 상황](docs/current_implementation_status.md)
-- [개발·운영 규칙](AGENT.md)
+- [개발·운영 규칙](AGENTS.md)
 - [Windows 자동 시작 안내](docs/streamlit_windows_auto_start_guide.md)
 - [Tailscale 원격 접속 안내](docs/tailscale_remote_access_guide.md)
 - [메인 PC Tailscale 연결 실행 계획서](docs/tailscale_main_pc_connection_plan.md)

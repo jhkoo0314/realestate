@@ -18,15 +18,14 @@ from storage.database import (
 )
 
 
-PHOTO_AVAILABILITY = ["있음", "없음", "확인 필요"]
-TASK_FILTERS = ["재확인 필요", "사진 촬영 필요", "사진 확인 필요", "현장 상태 확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
+TASK_FILTERS = ["재확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
 CLOSE_REASONS = ["계약 완료", "타 부동산 계약", "기타"]
 
 
 def _clear_filters() -> None:
     for key in (
         "dashboard_query", "dashboard_received_start", "dashboard_received_end", "dashboard_statuses",
-        "dashboard_listing_scope", "dashboard_room_types", "dashboard_photo_availability", "dashboard_task",
+        "dashboard_listing_scope", "dashboard_room_types", "dashboard_task",
         "dashboard_listing_holders", "dashboard_elevator_statuses", "dashboard_listing_holder_query",
         "dashboard_deposit_min", "dashboard_deposit_max", "dashboard_monthly_rent_min", "dashboard_monthly_rent_max",
     ):
@@ -109,8 +108,6 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
     for item in listings:
         lot_area, lot_number = split_lot_address(item["lot_address"])
         availability = item["availability_type"]
-        if availability == "날짜 지정" and item["available_from_date"]:
-            availability = f"{item['available_from_date']} 입주"
         row = {
             "매물번호": listing_number(item["listing_id"]), "매물접수일": item["received_date"], "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
@@ -132,13 +129,10 @@ def _render_quick_edit(selected: dict) -> None:
         f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] if selected['deposit_manwon'] is not None else '-'}/{selected['monthly_rent_manwon'] if selected['monthly_rent_manwon'] is not None else '-'}"
     )
     st.caption("확인·관리 상태와 매물 보유처만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
-    left, middle, date_column = st.columns(3)
+    left, date_column = st.columns(2)
     with left:
         status_index = LISTING_STATUSES.index(selected["listing_status"]) if selected["listing_status"] in LISTING_STATUSES else 0
         status = st.selectbox("상태", LISTING_STATUSES, index=status_index, key=f"quick_status_{selected['listing_id']}")
-    with middle:
-        has_photo_index = PHOTO_AVAILABILITY.index(selected["has_listing_photos"]) if selected["has_listing_photos"] in PHOTO_AVAILABILITY else 2
-        has_photo = st.selectbox("사진 보유 여부", PHOTO_AVAILABILITY, index=has_photo_index, key=f"quick_has_photo_{selected['listing_id']}", help="없음이면 사진 촬영 필요, 확인 필요면 사진 확인 필요로 자동 표시됩니다.")
     with date_column:
         current_date = date.fromisoformat(selected["next_check_date"]) if selected["next_check_date"] else None
         next_check = st.date_input("재확인 예정일", value=current_date, key=f"quick_next_check_{selected['listing_id']}")
@@ -154,15 +148,10 @@ def _render_quick_edit(selected: dict) -> None:
             st.error("직접 입력할 매물 보유처 이름을 입력해 주세요.")
             return
         try:
-            saved_has_photo = has_photo
             update_listing_quick_fields(
                 selected["listing_id"],
                 status,
-                saved_has_photo,
                 _date_text(next_check),
-                selected["cleaning_status"],
-                selected["wallpaper_status"],
-                selected["repair_status"],
                 listing_holder,
             )
             create_daily_backup()
@@ -170,7 +159,7 @@ def _render_quick_edit(selected: dict) -> None:
             st.error(f"수정하지 못했습니다. ({error})")
             return
         st.session_state["dashboard_quick_save_result"] = (
-            f"빠른 수정 저장 완료: 상태 {status} · 사진 보유 {saved_has_photo} · "
+            f"빠른 수정 저장 완료: 상태 {status} · "
             f"보유처 {listing_holder or '미입력'} · 재확인일 {_date_text(next_check) or '미지정'}"
         )
         st.rerun()
@@ -307,15 +296,13 @@ def render_dashboard(go_to_listing) -> None:
             received_start = st.date_input("접수일 시작", value=None, key="dashboard_received_start")
         with date_end_column:
             received_end = st.date_input("접수일 종료", value=None, key="dashboard_received_end")
-        filter_columns = st.columns(4)
+        filter_columns = st.columns(3)
         with filter_columns[0]:
             listing_scope = st.selectbox("표시할 매물", ["현재 매물만", "종료된 매물만", "전체"], key="dashboard_listing_scope")
         with filter_columns[1]:
             statuses = st.multiselect("매물 상태", LISTING_STATUSES, key="dashboard_statuses")
         with filter_columns[2]:
             room_types = st.multiselect("룸 형태", ROOM_TYPES, key="dashboard_room_types")
-        with filter_columns[3]:
-            photo_availability = st.multiselect("사진 보유 여부", PHOTO_AVAILABILITY, key="dashboard_photo_availability")
         holder_column, elevator_column = st.columns(2)
         with holder_column:
             listing_holders = st.multiselect("매물 보유처", ["미입력"] + LISTING_HOLDERS[:-1], key="dashboard_listing_holders")
@@ -365,7 +352,6 @@ def render_dashboard(go_to_listing) -> None:
         monthly_rent_max=monthly_rent_max,
         statuses=statuses,
         room_types=room_types,
-        photo_availability=photo_availability,
         listing_holders=listing_holders,
         elevator_statuses=elevator_statuses,
         listing_holder_query=listing_holder_query,

@@ -12,14 +12,14 @@ from storage.database import DATABASE_PATH, ensure_database_schema, get_connecti
 def get_unit_relisting_context(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
     require_database(path); connection=get_connection(path)
     try:
-        row=connection.execute("""SELECT u.id AS unit_id,u.unit_number,u.floor_number,u.room_type,u.direction,u.unit_options,u.access_method,u.unit_access_password,u.unit_highlights,b.id AS building_id,b.building_name,b.lot_address,b.admin_address,b.road_address,b.common_entrance_password,b.has_elevator,b.parking_status FROM units u JOIN buildings b ON b.id=u.building_id WHERE u.id=? AND u.is_active=1 AND b.is_active=1""",(unit_id,)).fetchone(); return dict(row) if row else None
+        row=connection.execute("""SELECT u.id AS unit_id,u.unit_number,u.floor_number,u.room_type,u.unit_options,u.access_method,u.unit_access_password,b.id AS building_id,b.building_name,b.lot_address,b.common_entrance_password,b.has_elevator,b.parking_status FROM units u JOIN buildings b ON b.id=u.building_id WHERE u.id=? AND u.is_active=1 AND b.is_active=1""",(unit_id,)).fetchone(); return dict(row) if row else None
     finally: connection.close()
 
 
 def get_current_listing(unit_id: int, path: Path = DATABASE_PATH) -> dict[str, Any] | None:
     ensure_database_schema(path); connection=get_connection(path)
     try:
-        row=connection.execute("""SELECT id,unit_id,received_date,listing_status,closed_date,close_reason,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,available_from_date,move_out_due_date,has_listing_photos,cleaning_status,wallpaper_status,repair_status,listing_holder,listing_note,next_check_date,landlord_contact,tenant_contact FROM listings WHERE unit_id=? ORDER BY CASE WHEN closed_date IS NULL AND listing_status NOT IN ('계약 완료','종료') THEN 0 ELSE 1 END, received_date DESC,id DESC LIMIT 1""",(unit_id,)).fetchone(); return dict(row) if row else None
+        row=connection.execute("""SELECT id,unit_id,received_date,listing_status,closed_date,close_reason,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,move_out_due_date,listing_holder,listing_note,next_check_date,landlord_contact,tenant_contact FROM listings WHERE unit_id=? ORDER BY CASE WHEN closed_date IS NULL AND listing_status NOT IN ('계약 완료','종료') THEN 0 ELSE 1 END, received_date DESC,id DESC LIMIT 1""",(unit_id,)).fetchone(); return dict(row) if row else None
     finally: connection.close()
 
 
@@ -29,7 +29,7 @@ def update_current_listing(listing_id: int, listing: dict[str, Any], path: Path 
         with connection:
             row=connection.execute("SELECT unit_id FROM listings WHERE id=?",(listing_id,)).fetchone()
             if row is None: raise ValueError("수정할 매물 정보를 찾을 수 없습니다.")
-            connection.execute("""UPDATE listings SET listing_status=?,closed_date=NULL,close_reason=NULL,deposit_manwon=?,monthly_rent_manwon=?,management_fee_manwon=?,availability_type=?,available_from_date=?,move_out_due_date=?,has_listing_photos=?,cleaning_status=?,wallpaper_status=?,repair_status=?,listing_holder=?,listing_note=?,next_check_date=?,landlord_contact=?,tenant_contact=? WHERE id=?""",(listing["listing_status"],listing["deposit_manwon"],listing["monthly_rent_manwon"],listing.get("management_fee_manwon"),listing["availability_type"],listing.get("available_from_date"),listing.get("move_out_due_date"),listing.get("has_listing_photos","확인 필요"),listing.get("cleaning_status"),listing.get("wallpaper_status"),listing.get("repair_status"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact"),listing_id))
+            connection.execute("""UPDATE listings SET listing_status=?,closed_date=NULL,close_reason=NULL,deposit_manwon=?,monthly_rent_manwon=?,management_fee_manwon=?,availability_type=?,move_out_due_date=?,listing_holder=?,listing_note=?,next_check_date=?,landlord_contact=?,tenant_contact=? WHERE id=?""",(listing["listing_status"],listing["deposit_manwon"],listing["monthly_rent_manwon"],listing.get("management_fee_manwon"),listing["availability_type"],listing.get("move_out_due_date"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact"),listing_id))
             if "unit_options" in listing:
                 connection.execute("UPDATE units SET unit_options=? WHERE id=?", (listing["unit_options"], row["unit_id"]))
     finally: connection.close()
@@ -93,7 +93,7 @@ def save_new_listing_round(unit_id: int, listing: dict[str, Any], path: Path = D
     try:
         with connection:
             if connection.execute("SELECT 1 FROM units WHERE id=? AND is_active=1",(unit_id,)).fetchone() is None: raise ValueError("선택한 호실을 찾을 수 없습니다. 다시 선택해 주세요.")
-            cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,available_from_date,move_out_due_date,has_listing_photos,cleaning_status,wallpaper_status,repair_status,listing_holder,listing_note,next_check_date,verification_note,landlord_contact,tenant_contact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("available_from_date"),listing.get("move_out_due_date"),listing.get("has_listing_photos","확인 필요"),listing.get("cleaning_status"),listing.get("wallpaper_status"),listing.get("repair_status"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("verification_note"),listing.get("landlord_contact"),listing.get("tenant_contact")))
+            cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,move_out_due_date,listing_holder,listing_note,next_check_date,landlord_contact,tenant_contact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("move_out_due_date"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact")))
             return cursor.lastrowid
     finally: connection.close()
 

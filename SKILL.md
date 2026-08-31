@@ -24,7 +24,7 @@ description: C:\realestate 부동산 매물관리 도구의 작업 맥락, 현�
 
 작업 전 아래 파일을 순서대로 읽고, 현재 상태를 확인합니다.
 
-1. `AGENT.md` — 프로젝트 전체 규칙
+1. `AGENTS.md` — 프로젝트 전체 규칙
 2. `docs/current_implementation_status.md` — 현재까지 구현된 기능과 남은 확인 사항
 3. `docs/TASK.md` — 단계별 작업 계획과 완료 기준
 

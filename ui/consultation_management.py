@@ -7,7 +7,7 @@ from datetime import date
 import streamlit as st
 
 from services.contact_format import format_phone_number
-from services.consultation_service import CLOSED_REASONS, CONSULTATION_CATEGORIES, CONSULTATION_SOURCES, CONSULTATION_STATUSES, CONSULTATION_TYPES, DESIRED_AREA_OPTIONS, DESIRED_ROOM_TYPE_OPTIONS, PROGRESS_STAGES, VISIT_RESULTS, close_legacy_consultation, delete_consultation, delete_consultation_activity, link_consultation_to_listing, save_consultation, save_consultation_activity, save_consultation_activity_changes, save_consultation_changes, validate_consultation, validate_consultation_activity
+from services.consultation_service import ACTIVITY_TYPES, CLOSED_REASONS, CONSULTATION_SOURCES, CONSULTATION_STATUSES, DESIRED_AREA_OPTIONS, DESIRED_ROOM_TYPE_OPTIONS, PROGRESS_STAGES, VISIT_RESULTS, close_legacy_consultation, delete_consultation, delete_consultation_activity, link_consultation_to_listing, save_consultation, save_consultation_activity, save_consultation_activity_changes, save_consultation_changes, validate_consultation, validate_consultation_activity
 from services.export_service import create_consultation_excel, make_management_export_filename
 from services.record_number import consultation_number, contract_number, listing_number
 from storage.consultation_repository import get_consultation_activities, get_consultation_delete_counts, get_consultation_detail, get_consultations, get_successful_contract_for_consultation
@@ -103,12 +103,12 @@ def _focus_badge(item: dict, today: date) -> str:
 def _rows(items: list[dict]) -> list[dict]:
     today = date.today().isoformat()
     return [{
-        "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": item["consultation_category"], "건물명": item["building_name"] or "-", "지번주소": item["lot_address"] or "-", "호실": item["unit_number"] or "-",
-        "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "상담 종류": item["consultation_type"], "유입 경로": item["consultation_source"] or "-",
+        "상담번호": consultation_number(item["consultation_id"]), "연결 매물번호": listing_number(item["listing_id"]), "고객 연락처": item["customer_phone"] or "-", "상담 구분": "일반 상담" if item["listing_id"] is None else "매물 상담", "건물명": item["building_name"] or "-", "지번주소": item["lot_address"] or "-", "호실": item["unit_number"] or "-",
+        "매물 접수일": item["received_date"], "상담일": item["consulted_date"], "유입 경로": item["consultation_source"] or "-",
         "진행 단계": "계약 성사" if item.get("has_active_linked_contract") else (item["progress_stage"] or "기존 기록"), "최근 상담일": item["last_contacted_date"] or item["consulted_date"], "종료 사유": item["closed_reason"] or "-", "상담 상태": "계약 성사" if item.get("has_active_linked_contract") else item["consultation_status"], "다음 연락일": item["next_contact_date"] or "-",
         "계약 성사": "계약 성사" if item.get("has_active_linked_contract") else "-",
         "해야 할 일": _task_text(item, today), "집중 대응": _focus_badge(item, date.today()),
-        "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_types"] or item["desired_room_type"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None, f"입주 가능일 {item['desired_available_from_date']}" if item.get("desired_available_from_date") else None])) or "-", "상담 내용": item["consultation_note"],
+        "희망 조건": " · ".join(filter(None, [item["desired_area"], item["desired_room_types"], f"{item['desired_deposit_manwon']}/{item['desired_monthly_rent_manwon']}" if item["desired_deposit_manwon"] is not None or item["desired_monthly_rent_manwon"] is not None else None, f"입주 가능일 {item['desired_available_from_date']}" if item.get("desired_available_from_date") else None])) or "-", "상담 내용": item["consultation_note"],
     } for item in items]
 
 
@@ -117,8 +117,8 @@ def _render_registration() -> None:
     registration_notice = st.session_state.pop("consultation_registration_notice", None)
     if registration_notice:
         st.success(registration_notice)
-    category = st.radio("상담 구분", CONSULTATION_CATEGORIES, horizontal=True, key="consultation_category")
-    if category == "일반 상담":
+    registration_mode = st.radio("등록 방식", ["일반 상담", "매물 연결 상담"], horizontal=True, key="consultation_registration_mode")
+    if registration_mode == "일반 상담":
         st.caption("아직 연결할 매물이 없거나 여러 매물을 함께 보는 상담을 기록합니다.")
         with st.form("general_consultation_create"):
             left, middle, right = st.columns(3)
@@ -126,7 +126,6 @@ def _render_registration() -> None:
                 customer_phone = st.text_input("고객 연락처", placeholder="예: 010-1234-5678")
             with middle:
                 consulted_date = st.date_input("상담일", value=date.today())
-                consultation_type = st.selectbox("상담 종류", CONSULTATION_TYPES)
             with right:
                 progress_stage = st.selectbox("진행 단계", PROGRESS_STAGES)
                 closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if progress_stage == "종료" else "선택 안 함"
@@ -145,9 +144,9 @@ def _render_registration() -> None:
         if submitted:
             customer_phone = format_phone_number(customer_phone)
             consultation, errors = validate_consultation({
-                "consultation_category": category, "customer_phone": customer_phone,
-                "consulted_date": consulted_date, "consultation_type": consultation_type, "consultation_source": consultation_source, "consultation_note": note,
-                "desired_area": desired_area, "desired_room_type": desired_room_types.split(" | ")[0] if desired_room_types else None,
+                "customer_phone": customer_phone,
+                "consulted_date": consulted_date, "consultation_source": consultation_source, "consultation_note": note,
+                "desired_area": desired_area,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
                 "desired_available_from_date": desired_available_from_date,
                 "next_contact_date": next_contact, "consultation_status": consultation_status,
@@ -191,7 +190,6 @@ def _render_registration() -> None:
             customer_phone = st.text_input("고객 연락처", placeholder="예: 010-1234-5678")
         with middle:
             consulted_date = st.date_input("상담일", value=date.today())
-            consultation_type = st.selectbox("상담 종류", CONSULTATION_TYPES)
         with right:
             progress_stage = st.selectbox("진행 단계", PROGRESS_STAGES)
             closed_reason = st.selectbox("종료 사유", ["선택 안 함", *CLOSED_REASONS]) if progress_stage == "종료" else "선택 안 함"
@@ -210,9 +208,9 @@ def _render_registration() -> None:
     if submitted:
         customer_phone = format_phone_number(customer_phone)
         consultation, errors = validate_consultation({
-            "consultation_category": category, "customer_phone": customer_phone, "consulted_date": consulted_date,
-            "consultation_type": consultation_type, "consultation_source": consultation_source, "consultation_note": note,
-            "desired_area": desired_area, "desired_room_type": desired_room_types.split(" | ")[0] if desired_room_types else None,
+            "customer_phone": customer_phone, "consulted_date": consulted_date,
+            "consultation_source": consultation_source, "consultation_note": note,
+            "desired_area": desired_area,
             "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
             "desired_available_from_date": desired_available_from_date,
             "next_contact_date": next_contact, "consultation_status": consultation_status,
@@ -237,18 +235,16 @@ def _render_lookup() -> None:
         query = st.text_input("상담번호·매물번호·건물명·지번·호수·희망 지역 검색", key="consultation_query", placeholder="예: S-000078 또는 M-000150")
         first_row = st.columns(3)
         with first_row[0]:
-            categories = st.multiselect("상담 구분", CONSULTATION_CATEGORIES, key="consultation_category_filter")
-        with first_row[1]:
             statuses = st.multiselect("상담 상태", CONSULTATION_STATUSES, key="consultation_status_filter")
-        with first_row[2]:
+        with first_row[1]:
             progress_stages = st.multiselect("진행 단계", PROGRESS_STAGES, key="consultation_stage_filter")
+        with first_row[2]:
+            due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
         second_row = st.columns(3)
         with second_row[0]:
             consulted_start = st.date_input("상담일 시작", value=None, key="consultation_start")
         with second_row[1]:
             consulted_end = st.date_input("상담일 종료", value=None, key="consultation_end")
-        with second_row[2]:
-            due_only = st.checkbox("다음 연락 필요만 보기", key="consultation_due_only")
         searched = st.form_submit_button("상담 조회", type="primary")
     if searched:
         st.session_state["consultation_has_searched"] = True
@@ -258,7 +254,6 @@ def _render_lookup() -> None:
         return
     items = get_consultations(
         query=query,
-        categories=categories,
         statuses=statuses,
         progress_stages=progress_stages,
         consulted_start=_date_text(consulted_start),
@@ -365,12 +360,12 @@ def _render_lookup() -> None:
             next_contact = st.date_input("다음 연락일", value=date.fromisoformat(detail["next_contact_date"]) if detail["next_contact_date"] else None)
             clear_next_contact = st.checkbox("다음 연락일 지정 취소")
         with right:
-            st.caption(f"상담 구분: {detail['consultation_category']}\n\n상담일: {detail['consulted_date']}\n\n상담 종류: {detail['consultation_type']}")
+            st.caption(f"상담 구분: {'일반 상담' if detail['listing_id'] is None else '매물 상담'}\n\n상담일: {detail['consulted_date']}")
             source_index = CONSULTATION_SOURCES.index(detail["consultation_source"]) if detail["consultation_source"] in CONSULTATION_SOURCES else 0
             consultation_source = st.selectbox("유입 경로", CONSULTATION_SOURCES, index=source_index)
         note = st.text_area("상담 내용", value=detail["consultation_note"])
         st.markdown("##### 희망 조건 (선택)")
-        desired_area, desired_room_types = _render_desired_condition_inputs(f"consultation_edit_{detail['consultation_id']}", desired_area=detail["desired_area"], desired_room_types=detail["desired_room_types"] or detail["desired_room_type"])
+        desired_area, desired_room_types = _render_desired_condition_inputs(f"consultation_edit_{detail['consultation_id']}", desired_area=detail["desired_area"], desired_room_types=detail["desired_room_types"])
         desired_right, desired_last, desired_date_column = st.columns(3)
         with desired_right: desired_deposit = st.number_input("희망 보증금 (만원)", min_value=0, step=100, value=detail["desired_deposit_manwon"])
         with desired_last: desired_monthly_rent = st.number_input("희망 월세 (만원)", min_value=0, step=5, value=detail["desired_monthly_rent_manwon"])
@@ -380,8 +375,8 @@ def _render_lookup() -> None:
         try:
             customer_phone = format_phone_number(customer_phone)
             save_consultation_changes(detail["consultation_id"], {
-                "consultation_category": detail["consultation_category"], "customer_name": detail["customer_name"], "customer_phone": customer_phone, "consultation_source": consultation_source, "consultation_note": note,
-                "desired_area": desired_area, "desired_room_type": desired_room_types.split(" | ")[0] if desired_room_types else None,
+                "customer_name": detail["customer_name"], "customer_phone": customer_phone, "consultation_source": consultation_source, "consultation_note": note,
+                "desired_area": desired_area,
                 "desired_deposit_manwon": desired_deposit, "desired_monthly_rent_manwon": desired_monthly_rent,
                 "desired_available_from_date": desired_available_from_date,
                 "next_contact_date": None if clear_next_contact else next_contact, "consultation_status": status, "desired_room_types": desired_room_types,
@@ -420,7 +415,8 @@ def _render_lookup() -> None:
                         edit_left, edit_middle, edit_right = st.columns(3)
                         with edit_left:
                             edit_activity_date = st.date_input("후속 상담일", value=date.fromisoformat(selected_activity["activity_date"]), key=f"activity_date_{edit_activity_id}")
-                            edit_activity_type = st.selectbox("상담 방식", CONSULTATION_TYPES, index=CONSULTATION_TYPES.index(selected_activity["activity_type"]), key=f"activity_type_{edit_activity_id}")
+                            activity_options = [selected_activity["activity_type"], *ACTIVITY_TYPES] if selected_activity["activity_type"] not in ACTIVITY_TYPES else ACTIVITY_TYPES
+                            edit_activity_type = st.selectbox("상담 방식", activity_options, index=activity_options.index(selected_activity["activity_type"]), key=f"activity_type_{edit_activity_id}")
                         with edit_middle:
                             visit_index = (["미입력", *VISIT_RESULTS].index(selected_activity["visit_result"]) if selected_activity["visit_result"] in VISIT_RESULTS else 0)
                             edit_visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS], index=visit_index, key=f"activity_visit_result_{edit_activity_id}")
@@ -468,7 +464,7 @@ def _render_lookup() -> None:
             activity_left, activity_middle, activity_right = st.columns(3)
             with activity_left:
                 activity_date = st.date_input("후속 상담일", value=date.today())
-                activity_type = st.selectbox("상담 방식", CONSULTATION_TYPES)
+                activity_type = st.selectbox("상담 방식", ACTIVITY_TYPES)
             with activity_middle:
                 visit_result = st.selectbox("방문 결과", ["미입력", *VISIT_RESULTS])
                 st.caption("방문 상담이 아니면 `미입력`으로 두세요.")
@@ -509,7 +505,7 @@ def _render_lookup() -> None:
                     st.success("기존 상담을 종료 처리했습니다. 다음 연락일은 해제됐고 기존 내용은 유지됩니다.")
                     st.rerun()
 
-    if detail["consultation_category"] == "일반 상담" and detail["listing_id"] is None:
+    if detail["listing_id"] is None:
         with st.expander("이 일반 상담에 매물 연결"):
             st.caption("고객에게 맞는 매물이 정해진 뒤에만 연결합니다. 연결 전까지는 일반 상담으로 유지됩니다.")
             link_query = st.text_input("연결할 매물 회차 찾기", key=f"general_consultation_link_query_{detail['consultation_id']}", placeholder="M-000150 또는 건물명·지번·호수 2글자 이상")

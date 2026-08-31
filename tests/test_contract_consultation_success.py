@@ -23,10 +23,10 @@ def _listing(connection, suffix: int) -> int:
 def _consultation(connection, listing_id: int, suffix: int) -> int:
     return connection.execute(
         """INSERT INTO consultations
-           (listing_id, customer_name, customer_phone, consulted_date, consultation_type, consultation_note,
+           (listing_id, customer_name, customer_phone, consulted_date, consultation_note,
             next_contact_date, consultation_status, progress_stage, last_contacted_date)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (listing_id, f"고객{suffix}", f"010-0000-00{suffix:02d}", "2026-08-29", "전화", "계약 전 상담", "2026-08-31", "진행 중", "검토 중", "2026-08-29"),
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (listing_id, f"고객{suffix}", f"010-0000-00{suffix:02d}", "2026-08-29", "계약 전 상담", "2026-08-31", "진행 중", "검토 중", "2026-08-29"),
     ).lastrowid
 
 

@@ -9,9 +9,8 @@ from storage.consultation_repository import add_consultation_activity, close_leg
 from services.backup_service import create_daily_backup
 
 
-CONSULTATION_TYPES = ["전화", "문자", "방문", "계약", "기타"]
+ACTIVITY_TYPES = ["전화", "문자", "방문", "계약", "기타"]
 CONSULTATION_STATUSES = ["진행 중", "보류", "종료", "확인 필요"]
-CONSULTATION_CATEGORIES = ["매물 상담", "일반 상담"]
 CONSULTATION_SOURCES = ["미입력", "직방", "다방", "당근", "네이버", "워크인", "타부동산 연계"]
 DESIRED_AREA_OPTIONS = ["북수리", "장재리", "공수리", "월천지구", "탕정역권", "기타 배방", "탕정", "기타"]
 DESIRED_ROOM_TYPE_OPTIONS = ["원룸", "투베이", "투룸", "쓰리룸", "주인세대", "기타"]
@@ -37,10 +36,8 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
     phone = _text(raw.get("customer_phone")) or "미입력"
     note = _text(raw.get("consultation_note")) or "미입력"
     consulted_date, next_contact = _date_text(raw.get("consulted_date")) or date.today().isoformat(), _date_text(raw.get("next_contact_date"))
-    category = raw.get("consultation_category", "매물 상담")
     deposit, monthly_rent = raw.get("desired_deposit_manwon"), raw.get("desired_monthly_rent_manwon")
     desired_available_from_date = _date_text(raw.get("desired_available_from_date"))
-    consultation_type = raw.get("consultation_type") if raw.get("consultation_type") in CONSULTATION_TYPES else "기타"
     consultation_status = raw.get("consultation_status") if raw.get("consultation_status") in CONSULTATION_STATUSES else "확인 필요"
     consultation_source = raw.get("consultation_source") if raw.get("consultation_source") in CONSULTATION_SOURCES else "미입력"
     progress_stage = raw.get("progress_stage") if raw.get("progress_stage") in [*PROGRESS_STAGES, *LEGACY_PROGRESS_STAGES] else "신규 문의"
@@ -48,15 +45,14 @@ def validate_consultation(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, l
     if progress_stage == "종료":
         consultation_status = "종료"
         next_contact = None
-    if category not in CONSULTATION_CATEGORIES: category = "매물 상담"
     if deposit is not None and deposit < 0: errors.append("희망 보증금은 0 이상의 숫자로 입력해 주세요.")
     if monthly_rent is not None and monthly_rent < 0: errors.append("희망 월세는 0 이상의 숫자로 입력해 주세요.")
     if errors:
         return None, errors
     return {
-        "consultation_category": category, "customer_name": name, "customer_phone": phone, "consulted_date": consulted_date,
-        "consultation_type": consultation_type, "consultation_source": consultation_source, "consultation_note": note,
-        "desired_area": _text(raw.get("desired_area")), "desired_room_type": _text(raw.get("desired_room_type")),
+        "customer_name": name, "customer_phone": phone, "consulted_date": consulted_date,
+        "consultation_source": consultation_source, "consultation_note": note,
+        "desired_area": _text(raw.get("desired_area")),
         "desired_deposit_manwon": int(deposit) if deposit is not None else None,
         "desired_monthly_rent_manwon": int(monthly_rent) if monthly_rent is not None else None,
         "desired_available_from_date": desired_available_from_date,
@@ -73,7 +69,7 @@ def save_consultation(listing_id: int | None, consultation: dict[str, Any]) -> i
 
 
 def save_consultation_changes(consultation_id: int, values: dict[str, Any]) -> None:
-    consultation, errors = validate_consultation({**values, "consulted_date": date.today(), "consultation_type": "기타", "consultation_category": values.get("consultation_category", "매물 상담")})
+    consultation, errors = validate_consultation({**values, "consulted_date": date.today()})
     if errors:
         raise ValueError(" ".join(errors))
     update_consultation(consultation_id, consultation)
@@ -114,7 +110,7 @@ def link_consultation_to_listing(consultation_id: int, listing_id: int) -> None:
 def validate_consultation_activity(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     errors: list[str] = []
     activity_date = _date_text(raw.get("activity_date")) or date.today().isoformat()
-    activity_type = raw.get("activity_type") if raw.get("activity_type") in CONSULTATION_TYPES else None
+    activity_type = raw.get("activity_type") if raw.get("activity_type") in ACTIVITY_TYPES else None
     stage = raw.get("stage_after_activity") if raw.get("stage_after_activity") in [*PROGRESS_STAGES, *LEGACY_PROGRESS_STAGES] else None
     visit_result = raw.get("visit_result") if raw.get("visit_result") in VISIT_RESULTS else None
     closed_reason = raw.get("closed_reason") if raw.get("closed_reason") in CLOSED_REASONS else None

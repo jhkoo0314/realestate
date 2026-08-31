@@ -44,7 +44,7 @@ def _render_source_consultation_summary(source: dict) -> None:
         "고객 연락처": source["customer_phone"] or "-",
         "유입 경로": source["consultation_source"] or "-",
         "희망 지역": source["desired_area"] or "-",
-        "희망 방 유형": source["desired_room_types"] or source["desired_room_type"] or "-",
+        "희망 방 유형": source["desired_room_types"] or "-",
         "예산(보증금/월세)": f"{source['desired_deposit_manwon'] if source['desired_deposit_manwon'] is not None else '-'} / {source['desired_monthly_rent_manwon'] if source['desired_monthly_rent_manwon'] is not None else '-'}",
         "입주 가능일": source["desired_available_from_date"] or "-",
         "최근 방문 결과": source["latest_visit_result"] or "-",

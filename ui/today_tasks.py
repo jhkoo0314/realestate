@@ -24,7 +24,7 @@ def _render_consultation_summary(consultation_id: int) -> None:
         return
     st.markdown("##### 선택한 상담 내용")
     st.caption(
-        f"{consultation_number(detail['consultation_id'])} · {detail['consultation_category']} · "
+        f"{consultation_number(detail['consultation_id'])} · {'일반 상담' if detail['listing_id'] is None else '매물 상담'} · "
         f"상담일 {detail['consulted_date']} · 연결 매물번호 {listing_number(detail['listing_id'])}"
     )
     contact_column, due_column = st.columns(2)

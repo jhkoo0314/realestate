@@ -42,9 +42,9 @@ def run() -> None:
             listing_id = connection.execute("INSERT INTO listings (unit_id, received_date, listing_status, availability_type) VALUES (?, ?, ?, ?)", (unit_id, "2026-08-20", "계약 진행 중", "즉시입주")).lastrowid
             consultation_id = connection.execute(
                 """INSERT INTO consultations
-                   (listing_id, customer_name, customer_phone, consulted_date, consultation_type, consultation_note, consultation_status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (listing_id, "확인 고객", "010-0000-0000", "2026-08-20", "전화", "계약 진행 확인", "종료"),
+                   (listing_id, customer_name, customer_phone, consulted_date, consultation_note, consultation_status)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (listing_id, "확인 고객", "010-0000-0000", "2026-08-20", "계약 진행 확인", "종료"),
             ).lastrowid
             contract_id = connection.execute(
                 "INSERT INTO contracts (listing_id, source_consultation_id, contract_type, contract_status) VALUES (?, ?, ?, ?)",

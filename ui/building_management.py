@@ -21,15 +21,12 @@ from storage.building_repository import (
     rename_unit,
     update_building_management_detail,
     update_current_listing_price,
-    update_current_listing_option_note,
     update_unit_management_detail,
 )
 from storage.contract_repository import get_contracts
 from services.lot_address_service import combine_lot_address, split_lot_address
 
 
-INFO_STATUSES = ["기본등록", "일부확인", "확인완료", "재확인 필요"]
-DIRECTIONS = ["확인 필요", "동", "서", "남", "북", "남동", "남서", "북동", "북서"]
 ACCESS_METHODS = ["확인 필요", "비밀번호", "열쇠", "세입자 협의", "관리인 문의"]
 
 
@@ -88,20 +85,12 @@ def _render_building_edit(building: dict) -> None:
                 edited_lot_number = st.text_input("번지 번호 *", value=lot_number, key=f"building_lot_number_{building_id}")
             if not lot_number:
                 st.caption("기존 지번 형식을 자동으로 나누지 못했습니다. 지번 지역과 번지 번호를 확인한 뒤 저장해 주세요.")
-            left, middle, right = st.columns(3)
+            left, middle = st.columns(2)
             with left:
                 elevator = st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], index=_index(["확인 필요", "있음", "없음"], building["has_elevator"]), key=f"building_elevator_{building_id}")
-                cctv = st.selectbox("CCTV", ["확인 필요", "있음", "없음"], index=_index(["확인 필요", "있음", "없음"], building["has_cctv"]), key=f"building_cctv_{building_id}")
             with middle:
                 parking = st.selectbox("주차", ["확인 필요", "가능", "제한적", "불가"], index=_index(["확인 필요", "가능", "제한적", "불가"], building["parking_status"]), key=f"building_parking_{building_id}")
-                pet_policy = st.selectbox("반려동물", ["확인 필요", "가능", "불가", "협의"], index=_index(["확인 필요", "가능", "불가", "협의"], building["pet_policy"]), key=f"building_pet_{building_id}")
-            with right:
-                move_in = st.selectbox("전입신고", ["확인 필요", "가능", "불가", "협의"], index=_index(["확인 필요", "가능", "불가", "협의"], building["move_in_registration_policy"]), key=f"building_movein_{building_id}")
-                short_term = st.selectbox("단기계약", ["확인 필요", "가능", "불가", "협의"], index=_index(["확인 필요", "가능", "불가", "협의"], building["short_term_policy"]), key=f"building_shortterm_{building_id}")
-                info_status = st.selectbox("정보 상태", INFO_STATUSES, index=_index(INFO_STATUSES, building["info_status"]), key=f"building_status_{building_id}")
-            common_fee = st.text_input("공통 관리비 메모", value=building["common_fee_note"] or "", key=f"building_fee_{building_id}")
-            highlights = st.text_area("건물 공통 장점", value=building["building_highlights"] or "", key=f"building_highlights_{building_id}")
-            next_check = st.date_input("건물 재확인 예정일", value=_date_value(building["next_check_date"]), key=f"building_next_check_{building_id}")
+            building_note = st.text_area("건물 메모", value=building["internal_note"] or "", key=f"building_note_{building_id}")
             password_action = st.selectbox(
                 "공동현관 비밀번호",
                 ["기존 비밀번호 유지", "새 비밀번호로 변경", "비밀번호 삭제"],
@@ -122,10 +111,7 @@ def _render_building_edit(building: dict) -> None:
             update_building_management_detail(building_id, {
                 "building_name": edited_building_name,
                 "lot_address": building["lot_address"] if address_was_not_split else combine_lot_address(edited_lot_area, edited_lot_number),
-                "has_elevator": elevator, "parking_status": parking, "has_cctv": cctv, "pet_policy": pet_policy,
-                "move_in_registration_policy": move_in, "short_term_policy": short_term, "common_fee_note": common_fee or None,
-                "building_highlights": highlights or None, "info_status": info_status,
-                "next_check_date": next_check.isoformat() if next_check else None,
+                "has_elevator": elevator, "parking_status": parking, "internal_note": building_note or None,
                 "common_entrance_password": new_password.strip() if password_action == "새 비밀번호로 변경" else None,
                 "clear_common_entrance_password": password_action == "비밀번호 삭제",
             })
@@ -155,10 +141,9 @@ def _render_unit_detail(unit_id: int) -> None:
                 room_type_options = [unit["room_type"], *ROOM_TYPES] if unit["room_type"] == "분리형 원룸" else ROOM_TYPES
                 room_type = st.selectbox("룸 형태", room_type_options, index=_index(room_type_options, unit["room_type"]), key=f"unit_room_type_{unit_id}")
             with middle:
-                direction = st.selectbox("방향", DIRECTIONS, index=_index(DIRECTIONS, unit["direction"]), key=f"unit_direction_{unit_id}")
                 access_method = st.selectbox("방문 방법", ACCESS_METHODS, index=_index(ACCESS_METHODS, unit["access_method"]), key=f"unit_access_{unit_id}")
             with right:
-                options = st.text_area("호실 옵션 (쉼표로 구분)", value=unit["unit_options"] or "", key=f"unit_options_{unit_id}")
+                options = st.text_area("옵션 호실 메모", value=unit["unit_options"] or "", key=f"unit_options_{unit_id}")
                 password_action = st.selectbox(
                     "방문 비밀번호",
                     ["기존 비밀번호 유지", "새 비밀번호로 변경", "비밀번호 삭제"],
@@ -167,16 +152,13 @@ def _render_unit_detail(unit_id: int) -> None:
                 new_password = ""
                 if password_action == "새 비밀번호로 변경":
                     new_password = st.text_input("새 방문 비밀번호", key=f"unit_password_{unit_id}")
-            highlights = st.text_area("구조상 장점", value=unit["unit_highlights"] or "", key=f"unit_highlights_{unit_id}")
-            cautions = st.text_area("구조상 유의점", value=unit["unit_cautions"] or "", key=f"unit_cautions_{unit_id}")
             submitted = st.form_submit_button("호실 기본정보 저장", type="primary")
         if submitted:
             if password_action == "새 비밀번호로 변경" and not new_password.strip():
                 st.error("새 비밀번호를 입력하거나 ‘기존 비밀번호 유지’를 선택해 주세요.")
                 return
             update_unit_management_detail(unit_id, {
-                "floor_number": floor, "room_type": room_type, "direction": direction, "unit_options": options or None,
-                "unit_highlights": highlights or None, "unit_cautions": cautions or None, "access_method": access_method,
+                "floor_number": floor, "room_type": room_type, "unit_options": options or None, "access_method": access_method,
                 "unit_access_password": new_password.strip() if password_action == "새 비밀번호로 변경" else None,
                 "clear_unit_access_password": password_action == "비밀번호 삭제",
             })
@@ -226,18 +208,6 @@ def _render_unit_detail(unit_id: int) -> None:
                         st.success(f"{listing_number(updated_listing_id)}의 보증금·월세를 저장했습니다.")
                         st.rerun()
 
-    with st.expander("이번 매물에만 다른 옵션"):
-        st.caption("이 내용은 호실 기본 옵션을 바꾸지 않고 현재 매물 기록에만 남습니다.")
-        option_note = st.text_area("이번 매물 옵션 변경 메모", key=f"option_note_{unit_id}")
-        if st.button("이번 매물 메모 저장", key=f"option_note_save_{unit_id}"):
-            try:
-                update_current_listing_option_note(unit_id, option_note or None)
-            except ValueError as error:
-                st.info(str(error))
-            else:
-                create_daily_backup()
-                st.success("이번 매물에만 옵션 변경 메모를 저장했습니다.")
-
     history = get_unit_listing_history(unit_id)
     st.markdown("#### 매물 이력")
     if history:
@@ -245,8 +215,8 @@ def _render_unit_detail(unit_id: int) -> None:
             "매물번호": listing_number(item["id"]), "접수일": item["received_date"], "상태": item["listing_status"],
             "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-", "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-",
             "관리비": item["management_fee_manwon"] or "-", "입주 가능": item["availability_type"],
-            "종료일": item["closed_date"] or "-", "종료 사유": item["close_reason"] or "-",
-            "이번 매물 옵션 변경": item["option_change_note"] or "-",
+            "종료 확인일": item["closed_date"] or "-", "종료 사유": item["close_reason"] or "-",
+            "매물 메모": item["listing_note"] or "-",
         } for item in history]
         st.dataframe(rows, width="stretch", hide_index=True)
     else:
@@ -296,7 +266,7 @@ def render_building_management() -> None:
         st.info("등록된 호실이 없습니다.")
         return
     st.dataframe([{
-        "호실": item["unit_number"], "최근 매물번호": listing_number(item["listing_id"]), "룸 형태": item["room_type"] or "미입력", "방향": item["direction"] or "미입력",
+        "호실": item["unit_number"], "최근 매물번호": listing_number(item["listing_id"]), "룸 형태": item["room_type"] or "미입력",
         "최근 조건": f"{item['deposit_manwon'] or '확인 필요'}/{item['monthly_rent_manwon'] or '확인 필요'}",
         "최근 상태": item["listing_status"] or "-", "마지막 접수일": item["received_date"] or "-",
     } for item in units], width="stretch", hide_index=True)
