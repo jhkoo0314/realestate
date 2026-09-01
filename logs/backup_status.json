@@ -1,8 +1,8 @@
 {
-  "recorded_at": "2026-08-31T16:20:34",
+  "recorded_at": "2026-09-01T10:10:26",
   "success": true,
-  "message": "백업 완료: real_estate_2026-08-31.db",
-  "backup_path": "C:\\Users\\W10\\OneDrive\\Documents\\매물관리백업\\daily\\real_estate_2026-08-31.db",
-  "backup_size": 245760,
-  "completed_at": "2026-08-31T16:20:34"
+  "message": "백업 완료: real_estate_2026-09-01.db",
+  "backup_path": "C:\\Users\\W10\\OneDrive\\Documents\\매물관리백업\\daily\\real_estate_2026-09-01.db",
+  "backup_size": 417792,
+  "completed_at": "2026-09-01T10:10:26"
 }

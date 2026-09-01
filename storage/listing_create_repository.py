@@ -33,12 +33,12 @@ def _validate(unit: dict[str, Any], listing: dict[str, Any]) -> str:
 
 
 def _insert_listing(connection, unit_id: int, listing: dict[str, Any]) -> int:
-    cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,move_out_due_date,listing_holder,listing_note,next_check_date,landlord_contact,tenant_contact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("move_out_due_date"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact")))
+    cursor=connection.execute("""INSERT INTO listings (unit_id,received_date,listing_status,deposit_manwon,monthly_rent_manwon,management_fee_manwon,availability_type,move_out_due_date,listing_holder,listing_note,next_check_date,landlord_contact,tenant_contact,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",(unit_id,listing.get("received_date",date.today().isoformat()),listing["listing_status"],listing.get("deposit_manwon"),listing.get("monthly_rent_manwon"),listing.get("management_fee_manwon"),listing["availability_type"],listing.get("move_out_due_date"),listing.get("listing_holder"),listing.get("listing_note"),listing.get("next_check_date"),listing.get("landlord_contact"),listing.get("tenant_contact")))
     return cursor.lastrowid
 
 
 def _insert_unit(connection, building_id: int, unit: dict[str, Any], normalized: str) -> int:
-    cursor=connection.execute("""INSERT INTO units (building_id,unit_number,unit_number_normalized,floor_number,room_type,unit_options,access_method,unit_access_password) VALUES (?,?,?,?,?,?,?,?)""",(building_id,str(unit["unit_number"]).strip(),normalized,unit.get("floor_number"),unit.get("room_type"),unit.get("unit_options"),unit.get("access_method"),unit.get("unit_access_password")))
+    cursor=connection.execute("""INSERT INTO units (building_id,unit_number,unit_number_normalized,floor_number,room_type,unit_options,access_method,unit_access_password,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",(building_id,str(unit["unit_number"]).strip(),normalized,unit.get("floor_number"),unit.get("room_type"),unit.get("unit_options"),unit.get("access_method"),unit.get("unit_access_password")))
     return cursor.lastrowid
 
 
@@ -48,7 +48,7 @@ def save_first_listing(building: dict[str, Any], unit: dict[str, Any], listing: 
     normalized=_validate(unit,listing); require_database(path); connection=get_connection(path)
     try:
         with connection:
-            cursor=connection.execute("""INSERT INTO buildings (building_name,lot_address,common_entrance_password,has_elevator,parking_status,internal_note) VALUES (?,?,?,?,?,?)""",(building_name,building["lot_address"].strip(),building.get("common_entrance_password"),building.get("has_elevator"),building.get("parking_status"),building.get("internal_note")))
+            cursor=connection.execute("""INSERT INTO buildings (building_name,lot_address,common_entrance_password,has_elevator,parking_status,internal_note,created_at,updated_at) VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",(building_name,building["lot_address"].strip(),building.get("common_entrance_password"),building.get("has_elevator"),building.get("parking_status"),building.get("internal_note")))
             building_id=cursor.lastrowid; unit_id=_insert_unit(connection,building_id,unit,normalized); return building_id,unit_id,_insert_listing(connection,unit_id,listing)
     finally: connection.close()
 
