@@ -79,6 +79,10 @@ def _render_consultation_picker(key: str, selected_id: int | None = None) -> int
     options: list[int | None] = [None, *[item["consultation_id"] for item in consultations]]
     labels = {None: "상담 없이 계약 등록"}
     labels.update({item["consultation_id"]: f"{consultation_number(item['consultation_id'])} · {item['customer_phone']} · {item['consulted_date']} · {item['consultation_source'] or '유입 미입력'}" for item in consultations})
+    if key in st.session_state:
+        if st.session_state[key] not in options:
+            st.session_state[key] = None
+        return st.selectbox("연결할 상담 선택", options, format_func=labels.get, key=key)
     index = options.index(selected_id) if selected_id in options else 0
     return st.selectbox("연결할 상담 선택", options, index=index, format_func=labels.get, key=key)
 
