@@ -27,7 +27,7 @@
 | 문서                                                | 사용 목적                                            |
 | --------------------------------------------------- | ---------------------------------------------------- |
 | `docs/TASK.md`                                      | 현재 구현 순서, 단계별 테스트, 완료 기록             |
-| `docs/current_implementation_status.md`             | 실제 구현 완료 범위, 자동 확인 및 남은 브라우저 확인 |
+| `docs/current_implementation_status.md`             | 실제 구현 완료 범위, 마이그레이션 및 브라우저 전 기능 테스트 결과 |
 | `docs/real_estate_listing_prd_v1.md`                | 제품 목적, 범위, 핵심 기능                           |
 | `docs/real_estate_data_dictionary_v1.md`            | 어떤 정보를 어디에 저장할지                          |
 | `docs/real_estate_listing_workflow_spec_v1.md`      | 신규 등록·재등록·수정의 업무 흐름                    |

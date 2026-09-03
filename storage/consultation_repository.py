@@ -173,7 +173,7 @@ def add_consultation_activity(consultation_id: int, activity: dict[str, Any], pa
         with connection:
             if connection.execute("SELECT 1 FROM consultations WHERE id = ?", (consultation_id,)).fetchone() is None:
                 raise ValueError("상담 기록을 찾을 수 없습니다.")
-            cursor = connection.execute("INSERT INTO consultation_activities (consultation_id, activity_date, activity_type, activity_note, stage_after_activity, visit_result, closed_reason, next_contact_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (consultation_id, activity["activity_date"], activity["activity_type"], activity.get("activity_note"), activity["stage_after_activity"], activity.get("visit_result"), activity.get("closed_reason"), activity.get("next_contact_date")))
+            cursor = connection.execute("INSERT INTO consultation_activities (consultation_id, activity_date, activity_type, activity_note, stage_after_activity, visit_result, closed_reason, next_contact_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (consultation_id, activity["activity_date"], activity["activity_type"], activity.get("activity_note"), activity["stage_after_activity"], activity.get("visit_result"), activity.get("closed_reason"), activity.get("next_contact_date")))
             _refresh_consultation_activity_summary(connection, consultation_id)
             return cursor.lastrowid
     finally: connection.close()

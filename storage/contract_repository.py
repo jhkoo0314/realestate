@@ -57,8 +57,8 @@ def _sync_linked_consultation(connection, contract_id: int, contract_status: str
         connection.execute(
             """INSERT INTO consultation_activities
                (consultation_id, activity_date, activity_type, activity_note, stage_after_activity,
-                closed_reason, next_contact_date)
-               VALUES (?, ?, '계약', ?, '계약 완료', '계약완료', NULL)""",
+                closed_reason, next_contact_date, created_at, updated_at)
+               VALUES (?, ?, '계약', ?, '계약 완료', '계약완료', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
             (consultation_id, activity_date, AUTO_CONTRACT_CONSULTATION_NOTE),
         )
 
@@ -103,7 +103,7 @@ def create_contract(listing_id: int, contract: dict[str, Any], path: Path = DATA
             source_consultation_id = contract.get("source_consultation_id")
             if source_consultation_id is not None and connection.execute("SELECT 1 FROM consultations WHERE id=?", (source_consultation_id,)).fetchone() is None:
                 raise ValueError("연결할 상담 기록을 찾을 수 없습니다. 다시 선택해 주세요.")
-            cursor = connection.execute("""INSERT INTO contracts (listing_id, source_consultation_id, contract_type, brokerage_method, contract_progress_date, formal_contract_date, contract_start_date, contract_end_date, term_months, contract_status, contract_note, contractor_name, contractor_contact, contract_deposit_manwon, provisional_deposit_manwon, remaining_deposit_due_date, balance_manwon, balance_due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (listing_id, source_consultation_id, contract["contract_type"], contract.get("brokerage_method"), contract.get("contract_progress_date"), contract.get("formal_contract_date"), contract.get("contract_start_date"), contract.get("contract_end_date"), contract.get("term_months"), contract["contract_status"], contract.get("contract_note"), contract.get("contractor_name"), contract.get("contractor_contact"), contract.get("contract_deposit_manwon"), contract.get("provisional_deposit_manwon"), contract.get("remaining_deposit_due_date"), contract.get("balance_manwon"), contract.get("balance_due_date")))
+            cursor = connection.execute("""INSERT INTO contracts (listing_id, source_consultation_id, contract_type, brokerage_method, contract_progress_date, formal_contract_date, contract_start_date, contract_end_date, term_months, contract_status, contract_note, contractor_name, contractor_contact, contract_deposit_manwon, provisional_deposit_manwon, remaining_deposit_due_date, balance_manwon, balance_due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""", (listing_id, source_consultation_id, contract["contract_type"], contract.get("brokerage_method"), contract.get("contract_progress_date"), contract.get("formal_contract_date"), contract.get("contract_start_date"), contract.get("contract_end_date"), contract.get("term_months"), contract["contract_status"], contract.get("contract_note"), contract.get("contractor_name"), contract.get("contractor_contact"), contract.get("contract_deposit_manwon"), contract.get("provisional_deposit_manwon"), contract.get("remaining_deposit_due_date"), contract.get("balance_manwon"), contract.get("balance_due_date")))
             _apply_linked_listing_status(connection, listing_id, contract["contract_status"])
             _sync_linked_consultation(connection, cursor.lastrowid, contract["contract_status"])
             return cursor.lastrowid
@@ -179,8 +179,8 @@ def add_contract_activity(contract_id: int, activity: dict[str, Any], path: Path
                 raise ValueError("계약 기록을 찾을 수 없습니다.")
             cursor = connection.execute(
                 """INSERT INTO contract_activities
-                   (contract_id, activity_date, activity_stage, activity_note, contract_status_after)
-                   VALUES (?, ?, ?, ?, ?)""",
+                   (contract_id, activity_date, activity_stage, activity_note, contract_status_after, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
                 (contract_id, activity["activity_date"], activity["activity_stage"], activity.get("activity_note"), activity["contract_status_after"]),
             )
             _refresh_contract_activity_summary(connection, contract_id)

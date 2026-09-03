@@ -30,7 +30,7 @@ def save_monthly_advertising_cost(values: dict[str, Any], path: Path = DATABASE_
             if current:
                 connection.execute("UPDATE monthly_advertising_costs SET monthly_cost_manwon=?, memo=? WHERE id=?", (values["monthly_cost_manwon"], values.get("memo"), current["id"]))
                 return current["id"]
-            cursor = connection.execute("INSERT INTO monthly_advertising_costs (year_month, advertising_channel, monthly_cost_manwon, memo) VALUES (?, ?, ?, ?)", (values["year_month"], values["advertising_channel"], values["monthly_cost_manwon"], values.get("memo")))
+            cursor = connection.execute("INSERT INTO monthly_advertising_costs (year_month, advertising_channel, monthly_cost_manwon, memo, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", (values["year_month"], values["advertising_channel"], values["monthly_cost_manwon"], values.get("memo")))
             return cursor.lastrowid
     finally:
         connection.close()
