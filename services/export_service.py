@@ -41,14 +41,15 @@ EXPORT_COLUMNS = [
 
 CONTRACT_EXPORT_COLUMNS = [
     ("계약번호", "contract_number", "text"),
+    ("계약 상태", "contract_status", "text"),
     ("매물번호", "listing_number", "text"),
     ("건물명", "building_name", "text"),
     ("지번주소", "lot_address", "text"),
     ("호실", "unit_number", "text"),
+    ("잔금 예정일", "balance_due_date", "date"),
     ("매물 접수일", "received_date", "date"),
     ("계약 유형", "contract_type", "text"),
     ("중개 방식", "brokerage_method", "text"),
-    ("계약 상태", "contract_status", "text"),
     ("계약 진행 시작일", "contract_progress_date", "date"),
     ("정식 계약일", "formal_contract_date", "date"),
     ("임대차 시작일", "contract_start_date", "date"),
@@ -58,7 +59,6 @@ CONTRACT_EXPORT_COLUMNS = [
     ("가계약금 수령액(만원)", "provisional_deposit_manwon", "number"),
     ("계약금 추가 수령 예정일", "remaining_deposit_due_date", "date"),
     ("잔금(만원)", "balance_manwon", "number"),
-    ("잔금 예정일", "balance_due_date", "date"),
     ("계약 메모", "contract_note", "text"),
 ]
 

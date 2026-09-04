@@ -97,13 +97,27 @@ def _contract_rows(contracts: list[dict]) -> list[dict]:
             if 0 <= days <= 30:
                 remaining = "D-day" if days == 0 else f"{days}일 남음"
         rows.append({
-            "계약번호": contract_number(item["contract_id"]), "매물번호": listing_number(item["listing_id"]), "건물명": item["building_name"], "지번주소": item["lot_address"], "호실": item["unit_number"], "매물 접수일": item["received_date"],
-            "계약 유형": item["contract_type"], "중개 방식": item["brokerage_method"] or "-", "진행 시작일": item["contract_progress_date"] or "-", "정식 계약일": item["formal_contract_date"] or "-",
-            "임대차 시작일": item["contract_start_date"] or "-", "임대차 종료일": item["contract_end_date"] or "-", "만료 임박": remaining,
-            "기간(개월)": item["term_months"] or "-", "계약금": item["contract_deposit_manwon"] or "-",
+            "계약번호": contract_number(item["contract_id"]),
+            "계약 상태": item["contract_status"],
+            "매물번호": listing_number(item["listing_id"]),
+            "건물명": item["building_name"],
+            "지번주소": item["lot_address"],
+            "호실": item["unit_number"],
+            "잔금 예정일": item["balance_due_date"] or "-",
+            "매물 접수일": item["received_date"],
+            "계약 유형": item["contract_type"],
+            "중개 방식": item["brokerage_method"] or "-",
+            "진행 시작일": item["contract_progress_date"] or "-",
+            "정식 계약일": item["formal_contract_date"] or "-",
+            "임대차 시작일": item["contract_start_date"] or "-",
+            "임대차 종료일": item["contract_end_date"] or "-",
+            "만료 임박": remaining,
+            "기간(개월)": item["term_months"] or "-",
+            "계약금": item["contract_deposit_manwon"] or "-",
             "가계약금": item["provisional_deposit_manwon"] or "-",
             "계약금 미수령": (item["contract_deposit_manwon"] - (item["provisional_deposit_manwon"] or 0)) if item["contract_deposit_manwon"] is not None else "-",
-            "추가 수령 예정일": item["remaining_deposit_due_date"] or "-", "잔금": item["balance_manwon"] or "-", "잔금 예정일": item["balance_due_date"] or "-", "계약 상태": item["contract_status"],
+            "추가 수령 예정일": item["remaining_deposit_due_date"] or "-",
+            "잔금": item["balance_manwon"] or "-",
             "메모": item["contract_note"] or "-",
         })
     return rows
