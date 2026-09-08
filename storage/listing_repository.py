@@ -101,7 +101,7 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
         parameters.append(f"%{holder_keyword}%")
     connection = get_connection(path)
     try:
-        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,u.unit_access_password,l.received_date,l.listing_status,l.closed_date,l.close_reason,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.move_out_due_date,l.listing_holder,l.next_check_date,l.listing_note,l.updated_at,
+        rows = connection.execute(f"""SELECT l.id AS listing_id,u.id AS unit_id,b.building_name,b.lot_address,u.unit_number,u.room_type,u.unit_access_password,l.received_date,l.listing_status,l.closed_date,l.close_reason,l.deposit_manwon,l.monthly_rent_manwon,l.management_fee_manwon,l.availability_type,l.move_out_due_date,l.listing_holder,l.advertised_platforms,l.next_check_date,l.listing_note,l.updated_at,
         (SELECT MIN(c.next_contact_date) FROM consultations c WHERE c.listing_id=l.id AND c.consultation_status != '종료' AND c.next_contact_date IS NOT NULL) AS next_contact_date
         FROM listings l JOIN units u ON u.id=l.unit_id JOIN buildings b ON b.id=u.building_id WHERE {' AND '.join(conditions)} ORDER BY CASE WHEN l.closed_date IS NULL THEN 1 ELSE 0 END, l.closed_date DESC, l.received_date DESC,l.updated_at DESC,l.id DESC""", parameters).fetchall()
         listings=[dict(row) for row in rows]
@@ -116,10 +116,10 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
     return [item for item in listings if not task_filter or task_filter in item["tasks"]]
 
 
-def update_listing_quick_fields(listing_id: int, listing_status: str, next_check_date: str | None, listing_holder: str | None, path: Path = DATABASE_PATH) -> None:
+def update_listing_quick_fields(listing_id: int, advertised_platforms: str | None, path: Path = DATABASE_PATH) -> None:
     ensure_database_schema(path); connection=get_connection(path)
     try:
         with connection:
             if connection.execute("SELECT 1 FROM listings WHERE id=? AND closed_date IS NULL",(listing_id,)).fetchone() is None: raise ValueError("수정할 현재 매물을 찾을 수 없습니다.")
-            connection.execute("UPDATE listings SET listing_status=?, next_check_date=?, listing_holder=? WHERE id=?",(listing_status,next_check_date,listing_holder,listing_id))
+            connection.execute("UPDATE listings SET advertised_platforms=? WHERE id=?",(advertised_platforms,listing_id))
     finally: connection.close()

@@ -109,7 +109,7 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
         lot_area, lot_number = split_lot_address(item["lot_address"])
         availability = item["availability_type"]
         row = {
-            "매물번호": listing_number(item["listing_id"]), "매물접수일": item["received_date"], "상태": item["listing_status"], "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
+            "매물번호": listing_number(item["listing_id"]), "매물접수일": item["received_date"], "상태": item["listing_status"], "광고 플랫폼": item.get("advertised_platforms") or "미등록", "매물 보유처": item["listing_holder"] or "미입력", "건물명": item["building_name"], "지번 지역": lot_area or "-", "번지 번호": lot_number or "-", "호수": item["unit_number"],
             "형태": item["room_type"] or "미입력", "보증금": item["deposit_manwon"] if item["deposit_manwon"] is not None else "-",
             "월세": item["monthly_rent_manwon"] if item["monthly_rent_manwon"] is not None else "-", "관리비": item["management_fee_manwon"] or "-",
             "입주 가능": availability, "세대 비밀번호": item["unit_access_password"] or "등록되지 않음",
@@ -123,44 +123,68 @@ def _display_rows(listings: list[dict], *, show_closure: bool = False) -> list[d
 
 
 def _render_quick_edit(selected: dict) -> None:
-    st.markdown("#### 선택한 매물 빠른 수정")
+    st.markdown("#### 선택한 매물 빠른 수정 (광고 등록 관리)")
     st.caption(
         f"{listing_number(selected['listing_id'])} · {selected['building_name']} · {selected['lot_address']} · {selected['unit_number']}호 · "
         f"접수일 {selected['received_date']} · 현재 조건 {selected['deposit_manwon'] if selected['deposit_manwon'] is not None else '-'}/{selected['monthly_rent_manwon'] if selected['monthly_rent_manwon'] is not None else '-'}"
     )
-    st.caption("확인·관리 상태와 매물 보유처만 바로 바꿉니다. 가격·입주일·메모를 바꾸려면 ‘최신 정보 수정’ 화면을 사용하세요.")
-    left, date_column = st.columns(2)
-    with left:
-        status_index = LISTING_STATUSES.index(selected["listing_status"]) if selected["listing_status"] in LISTING_STATUSES else 0
-        status = st.selectbox("상태", LISTING_STATUSES, index=status_index, key=f"quick_status_{selected['listing_id']}")
-    with date_column:
-        current_date = date.fromisoformat(selected["next_check_date"]) if selected["next_check_date"] else None
-        next_check = st.date_input("재확인 예정일", value=current_date, key=f"quick_next_check_{selected['listing_id']}")
-    holder_options = ["미입력"] + LISTING_HOLDERS
-    holder_initial = selected["listing_holder"] if selected["listing_holder"] in LISTING_HOLDERS else ("직접입력" if selected["listing_holder"] else "미입력")
-    holder_choice = st.selectbox("매물 보유처", holder_options, index=holder_options.index(holder_initial), key=f"quick_listing_holder_choice_{selected['listing_id']}")
-    holder_custom = ""
-    if holder_choice == "직접입력":
-        holder_custom = st.text_input("매물 보유처 직접입력", value=selected["listing_holder"] if holder_initial == "직접입력" else "", key=f"quick_listing_holder_custom_{selected['listing_id']}", placeholder="예: 지역 주택관리업체")
+    st.caption("이 매물의 광고 등록 여부 및 등록 플랫폼(직방, 당근, 네이버 등)을 빠르게 설정합니다. 조건 수정은 ‘최신 정보 수정’ 화면을 사용하세요.")
+    
+    current_ad_str = selected.get("advertised_platforms") or ""
+    parts = [p.strip() for p in current_ad_str.split(",") if p.strip()]
+    standard_platforms = ["직방", "당근", "네이버"]
+    
+    is_currently_advertised = len(parts) > 0
+    ad_status = st.radio(
+        "광고 등록 여부",
+        ["미등록", "광고 중"],
+        index=1 if is_currently_advertised else 0,
+        horizontal=True,
+        key=f"quick_ad_status_{selected['listing_id']}",
+    )
+    
+    selected_platforms = []
+    custom_platform = ""
+    if ad_status == "광고 중":
+        initial_selected = [p for p in parts if p in standard_platforms]
+        initial_custom = ", ".join([p for p in parts if p not in standard_platforms])
+
+        selected_platforms = st.multiselect(
+            "등록 광고 플랫폼 선택",
+            standard_platforms,
+            default=initial_selected,
+            key=f"quick_ad_platforms_{selected['listing_id']}",
+            help="직방, 당근, 네이버 중 등록된 플랫폼을 다중 선택할 수 있습니다.",
+        )
+        custom_platform = st.text_input(
+            "기타 광고 플랫폼 (선택사항)",
+            value=initial_custom,
+            key=f"quick_ad_custom_{selected['listing_id']}",
+            placeholder="예: 피터팬, 인스타그램, 블로그 등",
+        )
+
     if st.button("빠른 수정 저장", type="primary", key=f"quick_save_{selected['listing_id']}"):
-        listing_holder = holder_custom.strip() if holder_choice == "직접입력" else (None if holder_choice == "미입력" else holder_choice)
-        if holder_choice == "직접입력" and not listing_holder:
-            st.error("직접 입력할 매물 보유처 이름을 입력해 주세요.")
-            return
+        if ad_status == "미등록":
+            final_platforms_str = None
+        else:
+            all_platforms = list(selected_platforms)
+            if custom_platform.strip():
+                custom_parts = [p.strip() for p in custom_platform.split(",") if p.strip()]
+                for p in custom_parts:
+                    if p not in all_platforms:
+                        all_platforms.append(p)
+            final_platforms_str = ", ".join(all_platforms) if all_platforms else "광고 중(플랫폼 미지정)"
         try:
             update_listing_quick_fields(
                 selected["listing_id"],
-                status,
-                _date_text(next_check),
-                listing_holder,
+                final_platforms_str,
             )
             create_daily_backup()
         except Exception as error:
             st.error(f"수정하지 못했습니다. ({error})")
             return
         st.session_state["dashboard_quick_save_result"] = (
-            f"빠른 수정 저장 완료: 상태 {status} · "
-            f"보유처 {listing_holder or '미입력'} · 재확인일 {_date_text(next_check) or '미지정'}"
+            f"빠른 수정 저장 완료: 광고 등록 -> {final_platforms_str or '미등록'}"
         )
         st.rerun()
 
