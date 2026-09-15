@@ -19,7 +19,7 @@ LISTING_STATUSES = ["확인 필요", "퇴실 예정", "공실", "광고 가능",
 UNKNOWN_BUILDING_NAME = "건물명 미입력"
 ROOM_TYPES = ["원룸", "투룸", "투베이", "쓰리룸", "쓰리베이", "주인세대", "기타", "확인 필요"]
 AVAILABILITY_TYPES = ["즉시입주", "퇴실 후 협의", "확인 필요"]
-LISTING_HOLDERS = ["크린주택관리", "삼성주택관리", "한빛주택관리", "국제주택관리", "개인매물", "직접입력"]
+LISTING_HOLDERS = ["크린주택관리", "삼성주택관리", "한빛주택관리", "국제주택관리", "개인매물"]
 
 
 def _clean_text(value: Any) -> str | None:
@@ -34,15 +34,14 @@ def _date_text(value: Any) -> str | None:
 
 
 def _listing_holder(raw: dict[str, Any], *, required: bool) -> tuple[str | None, str | None]:
-    choice = _clean_text(raw.get("listing_holder_choice"))
-    holder = _clean_text(raw.get("listing_holder_custom")) if choice == "직접입력" else choice
+    choice = _clean_text(raw.get("listing_holder_choice") or raw.get("listing_holder"))
     if choice == "미입력":
-        holder = None
-    if required and not holder:
-        return None, "매물 보유처를 선택해 주세요. 직접입력을 고르면 이름도 입력해 주세요."
-    if choice and choice not in LISTING_HOLDERS and choice != "미입력":
+        choice = None
+    if required and not choice:
+        return None, "매물 보유처를 선택해 주세요."
+    if choice and choice not in LISTING_HOLDERS:
         return None, "매물 보유처를 목록에서 선택해 주세요."
-    return holder, None
+    return choice, None
 
 
 def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any]] | None, list[str]]:
@@ -107,7 +106,7 @@ def validate_first_listing(raw: dict[str, Any]) -> tuple[dict[str, dict[str, Any
             "listing_note": _clean_text(raw.get("listing_note")),
             "landlord_contact": _clean_text(raw.get("landlord_contact")),
             "tenant_contact": _clean_text(raw.get("tenant_contact")),
-            "next_check_date": _date_text(raw.get("next_check_date")),
+            "next_check_date": None,
         },
     }
     return payload, []
@@ -188,7 +187,7 @@ def validate_relisting(raw: dict[str, Any], *, require_listing_holder: bool = Tr
         "listing_note": note,
         "landlord_contact": _clean_text(raw.get("landlord_contact")),
         "tenant_contact": _clean_text(raw.get("tenant_contact")),
-        "next_check_date": _date_text(raw.get("next_check_date")),
+        "next_check_date": None,
     }, []
 
 

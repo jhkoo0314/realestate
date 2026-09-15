@@ -33,11 +33,11 @@ from storage.listing_write_repository import deactivate_unit, delete_unit, get_c
 
 INPUT_KEYS = [
     "building_name", "lot_address", "lot_area", "lot_number", "common_entrance_password",
-    "has_elevator", "building_internal_note", "unit_number", "floor_number",
-    "room_type", "unit_options", "access_method", "unit_access_password",
+    "has_elevator", "unit_number", "floor_number",
+    "room_type", "unit_access_password",
     "listing_status", "deposit_manwon", "monthly_rent_manwon",
     "management_fee_manwon", "received_date", "availability_type", "move_out_due_date",
-    "listing_holder_choice", "listing_holder_custom", "listing_note", "landlord_contact", "tenant_contact", "next_check_date",
+    "listing_holder_choice", "listing_note", "landlord_contact", "tenant_contact",
 ]
 
 REGISTRATION_ROOM_TYPES = ROOM_TYPES
@@ -87,22 +87,12 @@ def _fill_floor_from_unit_number() -> None:
         st.session_state[auto_key] = floor
 
 
-def _render_management_fields(key_prefix: str, values: dict | None = None) -> None:
-    """매물 등록·수정에서 재확인 예정일만 입력한다."""
-    values = values or {}
-    st.markdown("##### 확인·관리 사항")
-    st.caption("재확인 예정일을 저장하면 현황 조회와 확인 업무에 반영됩니다.")
-    st.date_input("재확인 예정일", value=_date_value(values.get("next_check_date")), key=f"{key_prefix}_next_check_date")
-
-
 def _render_listing_holder_fields(key_prefix: str, current_value: str | None = None) -> None:
-    """이번 매물 회차의 보유처를 선택하거나 직접 입력한다."""
+    """이번 매물 회차의 보유처를 선택한다."""
     options = ["미입력"] + LISTING_HOLDERS
-    initial_choice = current_value if current_value in LISTING_HOLDERS else ("직접입력" if current_value else "미입력")
+    initial_choice = current_value if current_value in LISTING_HOLDERS else "미입력"
     choice_key = f"{key_prefix}_listing_holder_choice"
-    custom_key = f"{key_prefix}_listing_holder_custom"
-    choice = st.selectbox("매물 보유처 *", options, index=options.index(initial_choice), key=choice_key)
-    st.text_input("매물 보유처 직접입력", value=current_value if initial_choice == "직접입력" else "", disabled=choice != "직접입력", key=custom_key, placeholder="예: 지역 주택관리업체")
+    st.selectbox("매물 보유처 *", options, index=options.index(initial_choice), key=choice_key)
 
 
 def _field_value(name: str):
@@ -198,10 +188,11 @@ def _render_new_building_fields() -> None:
         with number_column:
             st.text_input("번지 번호 *", key="registration_lot_number", placeholder="예: 1026, 산 12-3")
     st.caption("건물명을 모르면 비워 두세요. 지번 지역과 번지 번호, 호수로 등록하며 목록에는 `건물명 미입력`으로 표시됩니다.")
-    st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password")
-    with st.expander("건물 상세정보"):
+    row2_left, row2_right = st.columns(2)
+    with row2_left:
+        st.text_input("공동현관 비밀번호 (내부정보)", key="registration_common_entrance_password")
+    with row2_right:
         st.selectbox("엘리베이터", ["확인 필요", "있음", "없음"], key="registration_has_elevator")
-        st.text_area("건물 내부 메모 (외부 공유 금지)", key="registration_building_internal_note")
 
 
 def _render_existing_building_summary(building: dict) -> None:
@@ -245,10 +236,7 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
         if duplicate_unit:
             st.error(f"{unit_number}는 이미 등록된 호실입니다. 위 목록에서 해당 호실의 ‘최신 정보 수정’을 선택해 주세요.")
 
-    with st.expander("호실 상세정보"):
-        st.selectbox("방문 방법", ["확인 필요", "비밀번호", "열쇠", "세입자 협의", "관리인 문의"], key="registration_access_method")
-        st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password")
-        st.text_area("옵션 호실 메모", key="registration_unit_options")
+    st.text_input("방문 비밀번호 (내부정보)", key="registration_unit_access_password", placeholder="예: 1234* · 모르면 비워 두세요")
 
     st.divider()
     st.markdown("#### 4. 이번 매물 조건")
@@ -263,10 +251,13 @@ def _render_unit_and_listing_fields(building: dict | None) -> bool:
         st.date_input("매물 접수일", value=date.today(), key="registration_received_date", help="기본값은 오늘입니다. 실제 접수일이 다르면 바꿔 주세요.")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=None, key="registration_management_fee_manwon")
     st.caption("보증금과 월세는 선택 입력입니다. 전세 매물은 월세를 비워 두세요.")
-    _render_listing_holder_fields("registration")
 
-    st.date_input("퇴실 예정일", value=None, key="registration_move_out_due_date")
-    _render_management_fields("registration")
+    row2_left, row2_right = st.columns(2)
+    with row2_left:
+        _render_listing_holder_fields("registration")
+    with row2_right:
+        st.date_input("퇴실 예정일", value=None, key="registration_move_out_due_date")
+
     st.text_area("이번 매물 메모", key="registration_listing_note", placeholder="예: 세입자와 방문시간 협의 필요")
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
@@ -350,6 +341,9 @@ def _render_current_listing_edit(unit_id: int) -> None:
         _clear_current_listing_inputs()
         st.rerun()
 
+    is_closed = bool(listing.get("closed_date")) or listing.get("listing_status") in ("계약 완료", "종료")
+    default_received_date = date.today() if is_closed else (_date_value(listing.get("received_date")) or date.today())
+
     left, middle, right = st.columns(3)
     with left:
         status_index = LISTING_STATUSES.index(listing["listing_status"]) if listing["listing_status"] in LISTING_STATUSES else 0
@@ -361,9 +355,12 @@ def _render_current_listing_edit(unit_id: int) -> None:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, index=availability_index, key="edit_availability_type")
         st.number_input("관리비 (만원)", min_value=0, step=1, value=listing["management_fee_manwon"], key="edit_management_fee_manwon")
     with right:
+        st.date_input("매물 접수일", value=default_received_date, key="edit_received_date", help="종료 매물을 다시 공실 등으로 재등록할 때 오늘 날짜로 자동 설정되며, 필요 시 바꿔 주세요.")
+    row2_left, row2_right = st.columns(2)
+    with row2_left:
+        _render_listing_holder_fields("edit", listing.get("listing_holder"))
+    with row2_right:
         st.date_input("퇴실 예정일", value=_date_value(listing["move_out_due_date"]), key="edit_move_out_due_date")
-    _render_listing_holder_fields("edit", listing.get("listing_holder"))
-    _render_management_fields("edit", listing)
     st.text_area("이번 매물 메모", value=listing["listing_note"] or "", key="edit_listing_note")
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
@@ -375,6 +372,7 @@ def _render_current_listing_edit(unit_id: int) -> None:
 
     if st.button("최신 정보 저장", type="primary"):
         raw = {
+            "received_date": st.session_state.get("edit_received_date"),
             "listing_status": st.session_state.get("edit_listing_status"),
             "deposit_manwon": st.session_state.get("edit_deposit_manwon"),
             "monthly_rent_manwon": st.session_state.get("edit_monthly_rent_manwon"),
@@ -382,8 +380,6 @@ def _render_current_listing_edit(unit_id: int) -> None:
             "availability_type": st.session_state.get("edit_availability_type"),
             "move_out_due_date": st.session_state.get("edit_move_out_due_date"),
             "listing_holder_choice": st.session_state.get("edit_listing_holder_choice"),
-            "listing_holder_custom": st.session_state.get("edit_listing_holder_custom"),
-            "next_check_date": st.session_state.get("edit_next_check_date"),
             "listing_note": st.session_state.get("edit_listing_note"),
             "landlord_contact": st.session_state.get("edit_landlord_contact"),
             "tenant_contact": st.session_state.get("edit_tenant_contact"),
@@ -483,9 +479,11 @@ def _render_relisting_form(unit_id: int) -> None:
     with right:
         st.selectbox("입주 가능 유형 *", AVAILABILITY_TYPES, key="relisting_availability_type")
         st.date_input("매물 접수일", value=date.today(), key="relisting_received_date")
-    st.date_input("퇴실 예정일", value=None, key="relisting_move_out_due_date")
-    _render_listing_holder_fields("relisting")
-    _render_management_fields("relisting")
+    row2_left, row2_right = st.columns(2)
+    with row2_left:
+        _render_listing_holder_fields("relisting")
+    with row2_right:
+        st.date_input("퇴실 예정일", value=None, key="relisting_move_out_due_date")
     st.text_area("이번 매물 메모", key="relisting_listing_note")
     with st.expander("임대인·세입자 연락처 (내부정보)"):
         contact_left, contact_right = st.columns(2)
@@ -506,8 +504,6 @@ def _render_relisting_form(unit_id: int) -> None:
             "received_date": st.session_state.get("relisting_received_date"),
             "move_out_due_date": st.session_state.get("relisting_move_out_due_date"),
             "listing_holder_choice": st.session_state.get("relisting_listing_holder_choice"),
-            "listing_holder_custom": st.session_state.get("relisting_listing_holder_custom"),
-            "next_check_date": st.session_state.get("relisting_next_check_date"),
             "listing_note": st.session_state.get("relisting_listing_note"),
             "landlord_contact": st.session_state.get("relisting_landlord_contact"),
             "tenant_contact": st.session_state.get("relisting_tenant_contact"),
