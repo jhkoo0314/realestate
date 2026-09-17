@@ -109,7 +109,6 @@ def get_current_listings(*, query: str = "", received_start: str | None = None, 
     today=date.today().isoformat()
     for item in listings:
         tasks=[]
-        if item["next_check_date"] and item["next_check_date"] <= today: tasks.append("재확인 필요")
         if item["availability_type"] == "확인 필요": tasks.append("입주 가능일 확인 필요")
         if item["listing_status"] == "확인 필요": tasks.append("매물 상태 확인 필요")
         item["tasks"]=tasks

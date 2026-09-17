@@ -18,7 +18,7 @@ from storage.database import (
 )
 
 
-TASK_FILTERS = ["재확인 필요", "입주 가능일 확인 필요", "매물 상태 확인 필요"]
+TASK_FILTERS = ["입주 가능일 확인 필요", "매물 상태 확인 필요"]
 CLOSE_REASONS = ["계약 완료", "타 부동산 계약", "기타"]
 
 
@@ -37,68 +37,12 @@ def _date_text(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def _recheck_management_counts(listings: list[dict]) -> tuple[int, int]:
-    today = date.today()
-    recheck_deadline = today + timedelta(days=7)
-
-    def is_recheck_due_within_seven_days(item: dict) -> bool:
-        next_check_date = item.get("next_check_date")
-        if not next_check_date:
-            return False
-        try:
-            scheduled_date = date.fromisoformat(next_check_date)
-        except ValueError:
-            return False
-        return today < scheduled_date <= recheck_deadline
-
-    due_or_overdue = sum("재확인 필요" in item["tasks"] for item in listings)
-    upcoming_within_seven_days = sum(is_recheck_due_within_seven_days(item) for item in listings)
-    return due_or_overdue, upcoming_within_seven_days
-
-
-def _recheck_management_rows(listings: list[dict]) -> list[dict]:
-    """재확인 관리 수치와 같은 기준으로 확인할 매물 목록을 만든다."""
-    today = date.today()
-    recheck_deadline = today + timedelta(days=7)
-    rows = []
-    for item in listings:
-        next_check_date = item.get("next_check_date")
-        if not next_check_date:
-            continue
-        try:
-            scheduled_date = date.fromisoformat(next_check_date)
-        except ValueError:
-            continue
-        if scheduled_date < today:
-            recheck_status = "지연"
-        elif scheduled_date == today:
-            recheck_status = "오늘 재확인"
-        elif scheduled_date <= recheck_deadline:
-            recheck_status = "7일 이내 예정"
-        else:
-            continue
-        rows.append({
-            "매물번호": listing_number(item["listing_id"]),
-            "재확인 구분": recheck_status,
-            "재확인일": next_check_date,
-            "상태": item["listing_status"],
-            "건물명": item["building_name"],
-            "지번주소": item["lot_address"],
-            "호수": item["unit_number"],
-            "매물 보유처": item["listing_holder"] or "미입력",
-        })
-    order = {"지연": 0, "오늘 재확인": 1, "7일 이내 예정": 2}
-    return sorted(rows, key=lambda row: (order[row["재확인 구분"]], row["재확인일"], row["매물번호"]))
-
-
 def _summary(listings: list[dict]) -> dict[str, int]:
     today_text = date.today().isoformat()
-    due_or_overdue, upcoming_within_seven_days = _recheck_management_counts(listings)
 
     return {
         "오늘 새 접수": sum(item["received_date"] == today_text for item in listings),
         "퇴실 예정": sum(item["listing_status"] == "퇴실 예정" for item in listings),
-        "재확인 관리": due_or_overdue + upcoming_within_seven_days,
         "공실": sum(item["listing_status"] == "공실" for item in listings),
     }
 
@@ -289,20 +233,9 @@ def render_dashboard(go_to_listing) -> None:
         return
 
     metrics = _summary(all_listings)
-    recheck_due_or_overdue, recheck_upcoming = _recheck_management_counts(all_listings)
-    metric_columns = st.columns(4)
+    metric_columns = st.columns(3)
     for column, (label, value) in zip(metric_columns, metrics.items()):
         column.metric(label, value)
-        if label == "재확인 관리":
-            column.caption(f"도래·지연 {recheck_due_or_overdue}건 · 7일 이내 {recheck_upcoming}건")
-
-    recheck_rows = _recheck_management_rows(all_listings)
-    with st.expander(f"재확인 대상 매물 보기 · {len(recheck_rows)}건", expanded=False):
-        st.caption("오늘·지연 재확인과 오늘 다음 날부터 7일 이내 예정 매물입니다.")
-        if recheck_rows:
-            st.dataframe(recheck_rows, width="stretch", hide_index=True)
-        else:
-            st.info("오늘부터 7일 이내에 재확인할 현재 매물이 없습니다.")
 
     st.caption(f"데이터 파일: {DATABASE_PATH} · 현재 매물 {len(all_listings)}건")
     if not all_listings:
